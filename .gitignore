@@ -1,0 +1,27 @@
+# Large data files - too big for GitHub
+data/
+saved_models/*.h5
+saved_models/*.tflite
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Generated plot files
+*.png
+*.csv
+
+# VS Code
+.vscode/
+
+# Windows
+Thumbs.db
+desktop.ini

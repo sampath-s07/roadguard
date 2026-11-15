@@ -1,0 +1,500 @@
+/* =====================================================
+   RoadGuard v2 — script.js
+   Features: Upload, Webcam, Batch, History,
+             Top-3, Grad-CAM, Dark mode,
+             Drag-drop, Clipboard paste,
+             Sound alerts, CSV export, Toast errors
+   ===================================================== */
+
+const BACKEND = "http://localhost:5000";
+let currentFile  = null;
+let webcamStream = null;
+let history      = [];
+let soundEnabled = true;
+let batchApiResults = [];
+
+/* Dangerous class IDs — will trigger sound alert */
+const DANGER_IDS = new Set([9,10,13,14,15,16,17,18,19,20,21,22,23,25,27,28,29,30,31]);
+
+/* ══ DOM refs — Upload ══ */
+const dropZone    = document.getElementById("dropZone");
+const imgInput    = document.getElementById("imgInput");
+const previewWrap = document.getElementById("previewWrap");
+const imgPreview  = document.getElementById("imgPreview");
+const clearBtn    = document.getElementById("clearBtn");
+const analyzeBtn  = document.getElementById("analyzeBtn");
+const loadingDiv  = document.getElementById("loadingDiv");
+const resultCard  = document.getElementById("resultCard");
+const rName       = document.getElementById("r-name");
+const rBadge      = document.getElementById("r-badge");
+const rDesc       = document.getElementById("r-desc");
+const rConf       = document.getElementById("r-conf");
+const barFill     = document.getElementById("barFill");
+const top3List    = document.getElementById("top3List");
+const confWarning = document.getElementById("confWarning");
+const resetBtn    = document.getElementById("resetBtn");
+const gradcamBtn  = document.getElementById("gradcamBtn");
+const gradcamWrap = document.getElementById("gradcamWrap");
+const gradcamImg  = document.getElementById("gradcamImg");
+
+/* ══ DOM refs — Webcam ══ */
+const webcamVideo    = document.getElementById("webcamVideo");
+const webcamCanvas   = document.getElementById("webcamCanvas");
+const startCamBtn    = document.getElementById("startCamBtn");
+const captureBtn     = document.getElementById("captureBtn");
+const stopCamBtn     = document.getElementById("stopCamBtn");
+const camLoadingDiv  = document.getElementById("camLoadingDiv");
+const camResultCard  = document.getElementById("camResultCard");
+const camName        = document.getElementById("cam-name");
+const camBadge       = document.getElementById("cam-badge");
+const camDesc        = document.getElementById("cam-desc");
+const camConf        = document.getElementById("cam-conf");
+const camBarFill     = document.getElementById("camBarFill");
+const camTop3List    = document.getElementById("camTop3List");
+
+/* ══ DOM refs — Batch ══ */
+const batchDropZone    = document.getElementById("batchDropZone");
+const batchInput       = document.getElementById("batchInput");
+const batchFileList    = document.getElementById("batchFileList");
+const batchAnalyzeBtn  = document.getElementById("batchAnalyzeBtn");
+const batchLoadingDiv  = document.getElementById("batchLoadingDiv");
+const batchResults     = document.getElementById("batchResults");
+const csvDownloadBtn   = document.getElementById("csvDownloadBtn");
+
+/* ══ DOM refs — Misc ══ */
+const themeToggle  = document.getElementById("themeToggle");
+const soundToggle  = document.getElementById("soundToggle");
+const historyList  = document.getElementById("historyList");
+const clearHistBtn = document.getElementById("clearHistBtn");
+const toast        = document.getElementById("toast");
+
+/* ═══════════════════════════════════════════════
+   TABS
+   ═══════════════════════════════════════════════ */
+document.querySelectorAll(".tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        document.querySelectorAll(".tab-panel").forEach(p => p.classList.add("hidden"));
+        btn.classList.add("active");
+        document.getElementById("tab-" + btn.dataset.tab).classList.remove("hidden");
+    });
+});
+
+/* ═══════════════════════════════════════════════
+   DARK / LIGHT MODE
+   ═══════════════════════════════════════════════ */
+const html = document.documentElement;
+themeToggle.addEventListener("click", () => {
+    const isDark = html.getAttribute("data-theme") === "dark";
+    html.setAttribute("data-theme", isDark ? "light" : "dark");
+    themeToggle.textContent = isDark ? "🌙" : "☀️";
+});
+
+/* ═══════════════════════════════════════════════
+   SOUND ALERT
+   ═══════════════════════════════════════════════ */
+soundToggle.addEventListener("click", () => {
+    soundEnabled = !soundEnabled;
+    soundToggle.textContent = soundEnabled ? "🔔" : "🔕";
+    showToast(soundEnabled ? "Sound alerts ON" : "Sound alerts OFF", "success");
+});
+
+function playDangerBeep() {
+    if (!soundEnabled) return;
+    try {
+        const ctx  = new (window.AudioContext || window.webkitAudioContext)();
+        const osc  = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.setValueAtTime(660, ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.5);
+    } catch {}
+}
+
+/* ═══════════════════════════════════════════════
+   TOAST NOTIFICATION (replaces alert())
+   ═══════════════════════════════════════════════ */
+let toastTimer;
+function showToast(msg, type = "") {
+    clearTimeout(toastTimer);
+    toast.textContent = msg;
+    toast.className = "toast" + (type ? " " + type : "");
+    toast.classList.remove("hidden");
+    toastTimer = setTimeout(() => toast.classList.add("hidden"), 3000);
+}
+
+/* ═══════════════════════════════════════════════
+   UPLOAD — DRAG / DROP / CLICK / PASTE
+   ═══════════════════════════════════════════════ */
+dropZone.addEventListener("click", () => imgInput.click());
+
+dropZone.addEventListener("dragover", e => {
+    e.preventDefault();
+    dropZone.classList.add("drag-over");
+});
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+dropZone.addEventListener("drop", e => {
+    e.preventDefault();
+    dropZone.classList.remove("drag-over");
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith("image/")) loadFile(file);
+});
+
+imgInput.addEventListener("change", e => {
+    if (e.target.files[0]) loadFile(e.target.files[0]);
+});
+
+/* Paste from clipboard (Ctrl+V) */
+document.addEventListener("paste", e => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+        if (item.type.startsWith("image/")) {
+            const file = item.getAsFile();
+            if (file) {
+                /* Switch to upload tab */
+                document.querySelector('[data-tab="upload"]').click();
+                loadFile(file);
+            }
+            break;
+        }
+    }
+});
+
+function loadFile(file) {
+    currentFile = file;
+    const reader = new FileReader();
+    reader.onload = ev => {
+        imgPreview.src = ev.target.result;
+        show(previewWrap);
+        show(analyzeBtn);
+        hide(resultCard);
+        barFill.style.width = "0%";
+        hide(gradcamWrap);
+    };
+    reader.readAsDataURL(file);
+}
+
+clearBtn.addEventListener("click", resetUpload);
+resetBtn.addEventListener("click", resetUpload);
+
+function resetUpload() {
+    currentFile = null;
+    imgInput.value = "";
+    hide(previewWrap);
+    hide(analyzeBtn);
+    hide(resultCard);
+    barFill.style.width = "0%";
+    hide(gradcamWrap);
+}
+
+/* ═══════════════════════════════════════════════
+   ANALYZE — SINGLE IMAGE
+   ═══════════════════════════════════════════════ */
+analyzeBtn.addEventListener("click", async () => {
+    if (!currentFile) return;
+    hide(analyzeBtn);
+    show(loadingDiv);
+    hide(resultCard);
+    hide(gradcamWrap);
+
+    const result = await postImage(BACKEND + "/predict", "file", currentFile);
+    hide(loadingDiv);
+
+    if (!result || result.error) {
+        showToast(result?.error || "Cannot reach Flask backend on port 5000!", "error");
+        show(analyzeBtn);
+        return;
+    }
+
+    const top = result.top[0];
+    displayResult(top, result.top,
+        rName, rBadge, rDesc, rConf, barFill, top3List, confWarning);
+    show(resultCard);
+    addHistory(top, "upload");
+
+    /* Sound alert for dangerous signs */
+    if (DANGER_IDS.has(top.class_id)) {
+        playDangerBeep();
+        showToast("⚠️ Warning sign detected!", "warning");
+    }
+});
+
+/* Grad-CAM */
+gradcamBtn.addEventListener("click", async () => {
+    if (!currentFile) return;
+    gradcamBtn.textContent = "⏳ Generating heatmap…";
+    gradcamBtn.disabled = true;
+
+    const result = await postImage(BACKEND + "/gradcam", "file", currentFile);
+    gradcamBtn.textContent = "🔥 Show Heatmap (Grad-CAM)";
+    gradcamBtn.disabled = false;
+
+    if (!result || result.error) {
+        showToast("Grad-CAM failed: " + (result?.error || "unknown"), "error");
+        return;
+    }
+
+    gradcamImg.src = "data:image/png;base64," + result.image;
+    show(gradcamWrap);
+});
+
+/* ═══════════════════════════════════════════════
+   WEBCAM
+   ═══════════════════════════════════════════════ */
+startCamBtn.addEventListener("click", async () => {
+    try {
+        webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        webcamVideo.srcObject = webcamStream;
+        hide(startCamBtn);
+        show(captureBtn);
+        show(stopCamBtn);
+        hide(camResultCard);
+    } catch (err) {
+        showToast("Could not access camera: " + err.message, "error");
+    }
+});
+
+captureBtn.addEventListener("click", async () => {
+    /* Capture frame from video */
+    webcamCanvas.width  = webcamVideo.videoWidth;
+    webcamCanvas.height = webcamVideo.videoHeight;
+    webcamCanvas.getContext("2d").drawImage(webcamVideo, 0, 0);
+
+    webcamCanvas.toBlob(async blob => {
+        hide(captureBtn);
+        show(camLoadingDiv);
+        hide(camResultCard);
+
+        const result = await postImage(BACKEND + "/predict", "file", blob, "capture.png");
+        hide(camLoadingDiv);
+        show(captureBtn);
+
+        if (!result || result.error) {
+            showToast(result?.error || "Backend not reachable.", "error");
+            return;
+        }
+
+        const top = result.top[0];
+        displayResult(top, result.top,
+            camName, camBadge, camDesc, camConf, camBarFill, camTop3List, null);
+        show(camResultCard);
+        addHistory(top, "webcam");
+        if (DANGER_IDS.has(top.class_id)) { playDangerBeep(); showToast("⚠️ Warning sign!", "warning"); }
+    }, "image/png");
+});
+
+stopCamBtn.addEventListener("click", () => {
+    if (webcamStream) webcamStream.getTracks().forEach(t => t.stop());
+    webcamVideo.srcObject = null;
+    webcamStream = null;
+    show(startCamBtn);
+    hide(captureBtn);
+    hide(stopCamBtn);
+});
+
+/* ═══════════════════════════════════════════════
+   BATCH UPLOAD
+   ═══════════════════════════════════════════════ */
+batchDropZone.addEventListener("click", () => batchInput.click());
+
+batchDropZone.addEventListener("dragover", e => {
+    e.preventDefault();
+    batchDropZone.classList.add("drag-over");
+});
+batchDropZone.addEventListener("dragleave", () => batchDropZone.classList.remove("drag-over"));
+batchDropZone.addEventListener("drop", e => {
+    e.preventDefault();
+    batchDropZone.classList.remove("drag-over");
+    loadBatchFiles(e.dataTransfer.files);
+});
+
+batchInput.addEventListener("change", e => loadBatchFiles(e.target.files));
+
+let batchFiles = [];
+
+function loadBatchFiles(files) {
+    batchFiles = Array.from(files).filter(f => f.type.startsWith("image/"));
+    if (!batchFiles.length) return;
+
+    batchFileList.innerHTML = "";
+    batchFiles.forEach(f => {
+        const chip = document.createElement("div");
+        chip.className = "batch-chip";
+        chip.innerHTML = `<span>🖼 ${f.name}</span>`;
+        batchFileList.appendChild(chip);
+    });
+
+    show(batchFileList);
+    show(batchAnalyzeBtn);
+    hide(batchResults);
+}
+
+batchAnalyzeBtn.addEventListener("click", async () => {
+    if (!batchFiles.length) return;
+    hide(batchAnalyzeBtn);
+    show(batchLoadingDiv);
+    hide(batchResults);
+
+    const form = new FormData();
+    batchFiles.forEach(f => form.append("files", f));
+
+    let result;
+    try {
+        const res = await fetch(BACKEND + "/predict_batch", { method: "POST", body: form });
+        result = await res.json();
+    } catch {
+        hide(batchLoadingDiv);
+        show(batchAnalyzeBtn);
+        showToast("Backend not reachable. Is Flask running?", "error");
+        return;
+    }
+
+    hide(batchLoadingDiv);
+    show(batchAnalyzeBtn);
+
+    if (!result.results) { showToast("Batch failed.", "error"); return; }
+
+    batchResults.innerHTML = "";
+    result.results.forEach((r, i) => {
+        const row = document.createElement("div");
+        row.className = "batch-row";
+        if (r.error) {
+            row.innerHTML = `
+                <div class="batch-num">${i+1}</div>
+                <div class="batch-info">
+                    <div class="batch-fname">${r.filename}</div>
+                    <div class="batch-error">❌ ${r.error}</div>
+                </div>`;
+        } else {
+            row.innerHTML = `
+                <div class="batch-num">${i+1}</div>
+                <div class="batch-info">
+                    <div class="batch-label">🚦 ${r.label}</div>
+                    <div class="batch-fname">${r.filename}</div>
+                </div>
+                <div class="batch-conf">${r.confidence}%</div>`;
+            addHistory({ label: r.label, confidence: r.confidence, description: r.description }, "batch");
+        }
+        batchResults.appendChild(row);
+    });
+    batchApiResults = result.results;
+    show(batchResults);
+    show(csvDownloadBtn);
+});
+
+/* CSV Download */
+csvDownloadBtn.addEventListener("click", () => {
+    if (!batchApiResults.length) return;
+    const rows = [["#", "Filename", "Sign", "Confidence (%)", "Description"]];
+    batchApiResults.forEach((r, i) => {
+        if (!r.error) rows.push([i+1, r.filename, r.label, r.confidence, r.description || ""]);
+        else          rows.push([i+1, r.filename, "ERROR", "", r.error]);
+    });
+    const csv  = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = "roadguard_results.csv"; a.click();
+    URL.revokeObjectURL(url);
+    showToast("✅ CSV downloaded!", "success");
+});
+
+/* ═══════════════════════════════════════════════
+   HISTORY
+   ═══════════════════════════════════════════════ */
+function addHistory(top, source) {
+    const time = new Date().toLocaleTimeString();
+    history.unshift({ ...top, time, source });
+    renderHistory();
+}
+
+function renderHistory() {
+    if (!history.length) {
+        historyList.innerHTML = '<p class="history-empty">No detections yet.</p>';
+        return;
+    }
+    historyList.innerHTML = "";
+    history.slice(0, 20).forEach(h => {
+        const item = document.createElement("div");
+        item.className = "history-item";
+        const srcIcon = h.source === "webcam" ? "🎥" : h.source === "batch" ? "📁" : "📷";
+        item.innerHTML = `
+            <div class="hist-label">🚦 ${h.label}</div>
+            <div class="hist-meta">
+                <span class="hist-conf">${h.confidence}%</span>
+                <span>${srcIcon} ${h.source}</span>
+                <span>${h.time}</span>
+            </div>`;
+        historyList.appendChild(item);
+    });
+}
+
+clearHistBtn.addEventListener("click", () => {
+    history = [];
+    renderHistory();
+});
+
+/* ═══════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════ */
+function show(el) { el?.classList.remove("hidden"); }
+function hide(el) { el?.classList.add("hidden"); }
+
+async function postImage(url, fieldName, file, filename) {
+    const form = new FormData();
+    form.append(fieldName, file, filename || file.name || "image.png");
+    try {
+        const res = await fetch(url, { method: "POST", body: form });
+        return await res.json();
+    } catch {
+        return null;
+    }
+}
+
+function displayResult(top, top3, nameEl, badgeEl, descEl, confEl, barEl, top3El, warnEl) {
+    nameEl.textContent  = "🚦 " + top.label;
+    badgeEl.textContent = top.confidence + "%";
+    descEl.textContent  = top.description || "";
+    confEl.textContent  = "Confidence: " + top.confidence + "%";
+
+    barEl.style.width = "0%";
+    setTimeout(() => { barEl.style.width = top.confidence + "%"; }, 80);
+
+    /* Low confidence warning */
+    if (warnEl) {
+        if (top.confidence < 60) show(warnEl);
+        else hide(warnEl);
+    }
+
+    /* Top-3 list */
+    if (top3El) {
+        top3El.innerHTML = "";
+        top3.forEach((p, i) => {
+            const item = document.createElement("div");
+            item.className = "top3-item";
+            item.innerHTML = `
+                <div class="top3-rank rank-${i+1}">${i+1}</div>
+                <div class="top3-info">
+                    <div class="top3-label">${p.label}</div>
+                    <div class="top3-bar-track">
+                        <div class="top3-bar-fill" style="width:0%" data-pct="${p.confidence}"></div>
+                    </div>
+                </div>
+                <div class="top3-pct">${p.confidence}%</div>`;
+            top3El.appendChild(item);
+        });
+        /* Animate top-3 bars */
+        setTimeout(() => {
+            top3El.querySelectorAll(".top3-bar-fill").forEach(b => {
+                b.style.width = b.dataset.pct + "%";
+            });
+        }, 100);
+    }
+}

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>RoadGuard — Sign Gallery</title>
+    <link rel="stylesheet" href="style.css"/>
+    <style>
+        .gallery-header { text-align:center; margin: 28px 0 24px; }
+        .gallery-header h2 { font-size:1.5rem; font-weight:700; margin-bottom:6px; }
+        .gallery-header p  { color:var(--text2); font-size:.88rem; }
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 14px;
+            padding: 0 20px 40px;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        .sign-card {
+            background: var(--card);
+            border: 1.5px solid var(--border);
+            border-radius: 14px;
+            padding: 16px 14px;
+            transition: transform .15s, border-color .2s;
+            cursor: default;
+        }
+        .sign-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--orange);
+        }
+        .sign-emoji { font-size: 2rem; margin-bottom: 8px; }
+        .sign-id {
+            display: inline-block;
+            background: rgba(135,206,235,.25);
+            color: var(--sky-dark);
+            font-size: .68rem; font-weight:700;
+            padding: 2px 8px; border-radius: 20px;
+            margin-bottom: 6px;
+        }
+        .sign-name  { font-size:.88rem; font-weight:600; margin-bottom:4px; }
+        .sign-desc  { font-size:.74rem; color:var(--text2); line-height:1.4; }
+        .danger-tag {
+            display:inline-block;
+            background: rgba(255,80,80,.12);
+            color: #c0392b;
+            font-size:.65rem; font-weight:700;
+            padding:2px 8px; border-radius:20px;
+            margin-top:6px;
+        }
+        [data-theme="dark"] .danger-tag { color:#ff7070; background:rgba(255,80,80,.18); }
+        .back-btn {
+            display: inline-flex; align-items:center; gap:6px;
+            margin: 20px; padding: 8px 18px;
+            background: linear-gradient(135deg,var(--orange),var(--orange-dk));
+            color:#fff; border:none; border-radius:10px;
+            font-family:'Poppins',sans-serif; font-size:.88rem; font-weight:600;
+            cursor:pointer; text-decoration:none;
+        }
+        .stats-bar {
+            display:flex; gap:20px; justify-content:center;
+            flex-wrap:wrap; margin-bottom:24px;
+        }
+        .stat-pill {
+            background:var(--card); border:1.5px solid var(--border);
+            border-radius:12px; padding:8px 20px; text-align:center;
+        }
+        .stat-pill strong { display:block; font-size:1.3rem; color:var(--orange); }
+        .stat-pill span   { font-size:.75rem; color:var(--text2); }
+    </style>
+</head>
+<body>
+
+<header class="topbar">
+    <div class="brand">
+        <span class="brand-icon">🚦</span>
+        <span class="brand-name">RoadGuard <sup>v2</sup></span>
+    </div>
+    <div class="topbar-right">
+        <a href="index.html" class="back-btn">← Back to App</a>
+        <button id="themeToggle" class="theme-btn">🌙</button>
+    </div>
+</header>
+
+<div class="gallery-header">
+    <h2>🖼 All 43 Traffic Sign Classes</h2>
+    <p>Reference guide — tap any card to learn what the sign means</p>
+</div>
+
+<div class="stats-bar">
+    <div class="stat-pill"><strong>43</strong><span>Sign Classes</span></div>
+    <div class="stat-pill"><strong>39,209</strong><span>Training Images</span></div>
+    <div class="stat-pill"><strong>97.7%</strong><span>Test Accuracy</span></div>
+    <div class="stat-pill"><strong>12,630</strong><span>Test Images</span></div>
+</div>
+
+<div class="gallery-grid" id="galleryGrid"></div>
+
+<script>
+const signs = [
+    { id:0,  emoji:"🔢", name:"Speed limit 20km/h",         desc:"Maximum speed is 20 km/h in this zone.",                        danger:false },
+    { id:1,  emoji:"🔢", name:"Speed limit 30km/h",         desc:"Maximum speed is 30 km/h in this zone.",                        danger:false },
+    { id:2,  emoji:"🔢", name:"Speed limit 50km/h",         desc:"Maximum speed is 50 km/h in this zone.",                        danger:false },
+    { id:3,  emoji:"🔢", name:"Speed limit 60km/h",         desc:"Maximum speed is 60 km/h in this zone.",                        danger:false },
+    { id:4,  emoji:"🔢", name:"Speed limit 70km/h",         desc:"Maximum speed is 70 km/h in this zone.",                        danger:false },
+    { id:5,  emoji:"🔢", name:"Speed limit 80km/h",         desc:"Maximum speed is 80 km/h in this zone.",                        danger:false },
+    { id:6,  emoji:"🔢", name:"End speed limit 80",         desc:"The 80 km/h speed restriction ends here.",                      danger:false },
+    { id:7,  emoji:"🔢", name:"Speed limit 100km/h",        desc:"Maximum speed is 100 km/h in this zone.",                       danger:false },
+    { id:8,  emoji:"🔢", name:"Speed limit 120km/h",        desc:"Maximum speed is 120 km/h in this zone.",                       danger:false },
+    { id:9,  emoji:"🚗", name:"No passing",                 desc:"Overtaking other vehicles is not permitted.",                   danger:true  },
+    { id:10, emoji:"🚛", name:"No passing trucks",          desc:"Trucks must not overtake other vehicles.",                      danger:true  },
+    { id:11, emoji:"⬆️", name:"Right of way next",          desc:"Vehicles from the right have right of way at next junction.",   danger:false },
+    { id:12, emoji:"🔶", name:"Priority road",              desc:"This road has priority over intersecting roads.",               danger:false },
+    { id:13, emoji:"⚠️", name:"Yield",                      desc:"You must yield to all traffic on the main road.",               danger:true  },
+    { id:14, emoji:"🛑", name:"Stop",                       desc:"Come to a complete stop before proceeding.",                    danger:true  },
+    { id:15, emoji:"🚫", name:"No vehicles",                desc:"No vehicles of any kind are permitted.",                        danger:true  },
+    { id:16, emoji:"🚫", name:"No trucks",                  desc:"Trucks and lorries are not permitted.",                         danger:true  },
+    { id:17, emoji:"⛔", name:"No entry",                   desc:"Entry is not permitted — do not enter.",                        danger:true  },
+    { id:18, emoji:"⚠️", name:"General caution",            desc:"Be alert, there is a potential hazard ahead.",                  danger:true  },
+    { id:19, emoji:"↰",  name:"Left curve ahead",           desc:"Sharp left curve ahead — slow down.",                          danger:true  },
+    { id:20, emoji:"↱",  name:"Right curve ahead",          desc:"Sharp right curve ahead — slow down.",                         danger:true  },
+    { id:21, emoji:"〰️", name:"Double curve",               desc:"Two curves ahead — approach with caution.",                    danger:true  },
+    { id:22, emoji:"🛤️", name:"Bumpy road",                 desc:"Road surface is uneven or bumpy ahead.",                       danger:true  },
+    { id:23, emoji:"💧", name:"Slippery road",              desc:"Road surface may be slippery when wet.",                        danger:true  },
+    { id:24, emoji:"↔️", name:"Road narrows right",         desc:"Road narrows from the right side ahead.",                      danger:false },
+    { id:25, emoji:"🚧", name:"Road work",                  desc:"Road work or construction is active ahead.",                   danger:true  },
+    { id:26, emoji:"🚦", name:"Traffic signals",            desc:"Traffic signals are present ahead.",                           danger:false },
+    { id:27, emoji:"🚶", name:"Pedestrians",                desc:"Pedestrians may be crossing — drive carefully.",               danger:true  },
+    { id:28, emoji:"🧒", name:"Children crossing",          desc:"Children may be crossing — drive very carefully.",              danger:true  },
+    { id:29, emoji:"🚲", name:"Bicycle crossing",           desc:"Cyclists may be crossing — watch for bicycles.",               danger:true  },
+    { id:30, emoji:"❄️", name:"Beware ice/snow",            desc:"Risk of ice or snow on road — drive carefully.",               danger:true  },
+    { id:31, emoji:"🦌", name:"Wild animals crossing",      desc:"Wild animals may cross the road ahead.",                       danger:true  },
+    { id:32, emoji:"✅", name:"End restrictions",           desc:"All speed and passing restrictions end here.",                 danger:false },
+    { id:33, emoji:"➡️", name:"Turn right ahead",           desc:"Turn right at the next junction.",                             danger:false },
+    { id:34, emoji:"⬅️", name:"Turn left ahead",            desc:"Turn left at the next junction.",                              danger:false },
+    { id:35, emoji:"⬆️", name:"Go straight",               desc:"Continue straight ahead only.",                                danger:false },
+    { id:36, emoji:"↗️", name:"Go straight or right",      desc:"You may go straight or turn right.",                           danger:false },
+    { id:37, emoji:"↖️", name:"Go straight or left",       desc:"You may go straight or turn left.",                            danger:false },
+    { id:38, emoji:"▶️", name:"Keep right",                 desc:"Keep to the right side of the road.",                         danger:false },
+    { id:39, emoji:"◀️", name:"Keep left",                  desc:"Keep to the left side of the road.",                          danger:false },
+    { id:40, emoji:"🔄", name:"Roundabout mandatory",       desc:"You must follow the roundabout direction.",                    danger:false },
+    { id:41, emoji:"✅", name:"End no passing",             desc:"The no passing restriction ends here.",                        danger:false },
+    { id:42, emoji:"✅", name:"End no passing trucks",      desc:"The no passing restriction for trucks ends here.",             danger:false },
+];
+
+const grid = document.getElementById("galleryGrid");
+signs.forEach(s => {
+    const card = document.createElement("div");
+    card.className = "sign-card";
+    card.innerHTML = `
+        <div class="sign-emoji">${s.emoji}</div>
+        <div class="sign-id">Class ${s.id}</div>
+        <div class="sign-name">${s.name}</div>
+        <div class="sign-desc">${s.desc}</div>
+        ${s.danger ? '<div class="danger-tag">⚠️ Warning Sign</div>' : ''}
+    `;
+    grid.appendChild(card);
+});
+
+// Theme toggle
+const html = document.documentElement;
+document.getElementById("themeToggle").addEventListener("click", () => {
+    const dark = html.getAttribute("data-theme") === "dark";
+    html.setAttribute("data-theme", dark ? "light" : "dark");
+    document.getElementById("themeToggle").textContent = dark ? "🌙" : "☀️";
+});
+</script>
+</body>
+</html>
