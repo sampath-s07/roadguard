@@ -108,8 +108,11 @@
                 </div>
             </div>
 
-            <!-- Analyze button -->
-            <button class="btn-primary hidden" id="analyzeBtn">🔍 Identify Sign</button>
+            <!-- Action buttons row -->
+            <div class="action-row hidden" id="actionRow">
+                <button class="btn-primary" id="analyzeBtn">🔍 Identify Sign</button>
+                <button class="btn-detect" id="detectBtn">🎯 YOLOv8 Detect</button>
+            </div>
 
             <!-- Loading -->
             <div class="loading hidden" id="loadingDiv">
@@ -159,6 +162,17 @@
                 </div>
 
                 <button class="btn-secondary" id="resetBtn">↩ Try Another</button>
+            </div>
+
+            <!-- YOLOv8 Detection result -->
+            <div class="detect-card hidden" id="detectCard">
+                <div class="detect-header">
+                    <span>🎯 YOLOv8 Detection Result</span>
+                    <span class="detect-count" id="detectCount">0 objects</span>
+                </div>
+                <img id="detectImg" class="detect-img" src="" alt="detection" />
+                <div id="detectList" class="detect-list"></div>
+                <button class="btn-secondary" id="detectResetBtn">↩ Try Another</button>
             </div>
         </div>
 

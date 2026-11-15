@@ -1,11 +1,9 @@
 tensorflow
-opencv-python
-scikit-learn
+opencv-python-headless
 matplotlib
-seaborn
 pandas
 flask
 flask-cors
-kaggle
 numpy
 Pillow
+ultralytics

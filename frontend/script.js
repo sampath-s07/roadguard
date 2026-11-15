@@ -18,6 +18,14 @@ let soundEnabled    = true;
 let batchApiResults = [];
 let currentDataset  = "german";   // 'german' | 'india'
 
+/* YOLOv8 DOM refs */
+const detectBtn      = document.getElementById("detectBtn");
+const detectCard     = document.getElementById("detectCard");
+const detectImg      = document.getElementById("detectImg");
+const detectCount    = document.getElementById("detectCount");
+const detectList     = document.getElementById("detectList");
+const detectResetBtn = document.getElementById("detectResetBtn");
+
 /* Dangerous class IDs (German GTSRB) — will trigger sound alert */
 const DANGER_IDS = new Set([9,10,13,14,15,16,17,18,19,20,21,22,23,25,27,28,29,30,31]);
 
@@ -193,8 +201,10 @@ function loadFile(file) {
     reader.onload = ev => {
         imgPreview.src = ev.target.result;
         show(previewWrap);
-        show(analyzeBtn);
+        // Show action row (both buttons)
+        document.getElementById("actionRow").classList.remove("hidden");
         hide(resultCard);
+        hide(detectCard);
         barFill.style.width = "0%";
         hide(gradcamWrap);
     };
@@ -208,11 +218,66 @@ function resetUpload() {
     currentFile = null;
     imgInput.value = "";
     hide(previewWrap);
-    hide(analyzeBtn);
+    document.getElementById("actionRow").classList.add("hidden");
     hide(resultCard);
+    hide(detectCard);
     barFill.style.width = "0%";
     hide(gradcamWrap);
 }
+
+/* ═══════════════════════════════════════════════
+   YOLOV8 DETECT
+   ═══════════════════════════════════════════════ */
+detectBtn.addEventListener("click", async () => {
+    if (!currentFile) return;
+    detectBtn.textContent = "⏳ Detecting…";
+    detectBtn.disabled    = true;
+    hide(resultCard);
+    hide(detectCard);
+    show(loadingDiv);
+
+    const result = await postImage(BACKEND + "/detect", "file", currentFile);
+    hide(loadingDiv);
+    detectBtn.textContent = "🎯 YOLOv8 Detect";
+    detectBtn.disabled    = false;
+
+    if (!result || result.error) {
+        showToast(result?.error || "Detection failed!", "error");
+        return;
+    }
+
+    // Show annotated image
+    detectImg.src = "data:image/jpeg;base64," + result.image;
+
+    // Show count badge
+    const n = result.count || 0;
+    detectCount.textContent = n + (n === 1 ? " object" : " objects");
+
+    // Build detection list
+    detectList.innerHTML = "";
+    (result.detections || []).forEach((d, i) => {
+        const item = document.createElement("div");
+        item.className = "detect-item";
+        item.innerHTML = `
+            <div class="detect-num">${i+1}</div>
+            <div class="detect-info">
+                <div class="detect-label">🚦 ${d.sign_label}</div>
+                <div class="detect-sub">YOLO: ${d.yolo_class} (${d.yolo_conf}%)</div>
+            </div>
+            <div class="detect-pct">${d.confidence}%</div>`;
+        detectList.appendChild(item);
+        addHistory({ label: d.sign_label, confidence: d.confidence, description: "" }, "yolo", currentDataset);
+    });
+
+    if (n === 0) {
+        detectList.innerHTML = '<p style="text-align:center;color:var(--text2);padding:12px">No objects detected in this image.</p>';
+    }
+
+    show(detectCard);
+    showToast(`🎯 Found ${n} object${n !== 1 ? "s" : ""}!`, n > 0 ? "success" : "");
+});
+
+detectResetBtn.addEventListener("click", resetUpload);
 
 /* ═══════════════════════════════════════════════
    ANALYZE — SINGLE IMAGE

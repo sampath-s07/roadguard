@@ -3,24 +3,25 @@ from flask_cors import CORS
 import os, sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from backend.model_loader import load_model, load_india_model, run_prediction, run_gradcam
+from backend.model_loader  import load_model, load_india_model, run_prediction, run_gradcam
+from backend.yolo_detector import load_yolo, detect_and_classify
 
 app = Flask(__name__, static_folder="../frontend", static_url_path="")
 CORS(app)
 
-BASE        = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE         = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GERMAN_MODEL = os.path.join(BASE, "saved_models", "custom_cnn.h5")
 INDIA_MODEL  = os.path.join(BASE, "saved_models", "india_cnn.h5")
 INDIA_NAMES  = os.path.join(BASE, "saved_models", "india_sign_names.json")
 
-# Load both models at startup
-ok_de = load_model(GERMAN_MODEL)
-ok_in = load_india_model(INDIA_MODEL, INDIA_NAMES)
+# Load models at startup
+ok_de   = load_model(GERMAN_MODEL)
+ok_in   = load_india_model(INDIA_MODEL, INDIA_NAMES)
+ok_yolo = load_yolo()
 
-if not ok_de:
-    print("WARNING: German model load failed.")
-if not ok_in:
-    print("WARNING: India model load failed (optional).")
+if not ok_de:   print("WARNING: German model load failed.")
+if not ok_in:   print("WARNING: India model load failed (optional).")
+if not ok_yolo: print("WARNING: YOLOv8 not available (pip install ultralytics).")
 
 
 # ── PAGES ──────────────────────────────────────────────────────────────────────
@@ -41,12 +42,13 @@ def status():
         "version": "2.0",
         "models": {
             "german": ok_de,
-            "india":  ok_in
+            "india":  ok_in,
+            "yolo":   ok_yolo
         }
     })
 
 
-# ── PREDICT ────────────────────────────────────────────────────────────────────
+# ── PREDICT (single image, classify) ──────────────────────────────────────────
 @app.route("/predict", methods=["POST"])
 def predict():
     if "file" not in request.files:
@@ -55,7 +57,7 @@ def predict():
     if f.filename == "":
         return jsonify({"error": "empty filename"}), 400
 
-    dataset = request.form.get("dataset", "german")   # 'german' or 'india'
+    dataset = request.form.get("dataset", "german")
     raw     = f.read()
     results = run_prediction(raw, dataset=dataset)
     if results is None:
@@ -64,6 +66,31 @@ def predict():
     top = results[0]
     print(f"[{dataset}] predicted: {top['label']} ({top['confidence']}%)")
     return jsonify({"top": results, "dataset": dataset})
+
+
+# ── DETECT (YOLOv8 bounding boxes + CNN classify) ─────────────────────────────
+@app.route("/detect", methods=["POST"])
+def detect():
+    if not ok_yolo:
+        return jsonify({"error": "YOLOv8 not installed on server. Run: pip install ultralytics"}), 503
+    if "file" not in request.files:
+        return jsonify({"error": "no image file"}), 400
+
+    f       = request.files["file"]
+    dataset = request.form.get("dataset", "german")
+    raw     = f.read()
+
+    b64, detections = detect_and_classify(raw, run_prediction, dataset=dataset)
+    if b64 is None:
+        return jsonify({"error": "detection failed"}), 500
+
+    print(f"[yolo/{dataset}] {len(detections)} object(s) detected")
+    return jsonify({
+        "image":      b64,          # annotated image base64
+        "detections": detections,   # list of boxes + labels
+        "count":      len(detections),
+        "dataset":    dataset
+    })
 
 
 # ── PREDICT BATCH ──────────────────────────────────────────────────────────────
