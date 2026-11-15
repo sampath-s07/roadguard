@@ -6,7 +6,9 @@
              Sound alerts, CSV export, Toast errors
    ===================================================== */
 
-const BACKEND = "http://localhost:5000";
+const BACKEND = window.location.origin.includes("localhost")
+    ? "http://localhost:5000"
+    : window.location.origin;
 let currentFile  = null;
 let webcamStream = null;
 let history      = [];

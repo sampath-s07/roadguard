@@ -1,11 +1,11 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os, sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend.model_loader import load_model, run_prediction, run_gradcam
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="../frontend", static_url_path="")
 CORS(app)
 
 MODEL = os.path.join(
@@ -20,6 +20,14 @@ if not ok:
 
 @app.route("/")
 def index():
+    return send_from_directory(app.static_folder, "index.html")
+
+@app.route("/gallery")
+def gallery():
+    return send_from_directory(app.static_folder, "gallery.html")
+
+@app.route("/status")
+def status():
     return jsonify({"status": "RoadGuard API running", "version": "2.0"})
 
 
