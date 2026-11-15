@@ -3,10 +3,12 @@ import numpy as np
 import cv2
 import base64
 import os
+import json
 
-model = None
+# ── GERMAN (GTSRB) model ──────────────────────────────────────────────────────
+german_model = None
 
-sign_names = [
+german_sign_names = [
     "Speed limit 20km/h", "Speed limit 30km/h", "Speed limit 50km/h",
     "Speed limit 60km/h", "Speed limit 70km/h", "Speed limit 80km/h",
     "End speed limit 80", "Speed limit 100km/h", "Speed limit 120km/h",
@@ -23,7 +25,7 @@ sign_names = [
     "End no passing", "End no passing trucks"
 ]
 
-sign_descriptions = [
+german_sign_descriptions = [
     "Maximum speed is 20 km/h in this zone.",
     "Maximum speed is 30 km/h in this zone.",
     "Maximum speed is 50 km/h in this zone.",
@@ -69,14 +71,35 @@ sign_descriptions = [
     "The no passing restriction for trucks ends here."
 ]
 
+# ── INDIAN model ──────────────────────────────────────────────────────────────
+india_model      = None
+india_sign_names = []
+
 
 def load_model(path):
-    global model
+    """Load German (GTSRB) model."""
+    global german_model
     if not os.path.exists(path):
-        print("model not found:", path)
+        print("German model not found:", path)
         return False
-    model = tf.keras.models.load_model(path)
-    print("model loaded successfully:", path)
+    german_model = tf.keras.models.load_model(path)
+    print("German model loaded:", path)
+    return True
+
+
+def load_india_model(model_path, names_path):
+    """Load Indian traffic sign model + sign names JSON."""
+    global india_model, india_sign_names
+    if not os.path.exists(model_path):
+        print("India model not found:", model_path)
+        return False
+    if not os.path.exists(names_path):
+        print("India sign names not found:", names_path)
+        return False
+    india_model = tf.keras.models.load_model(model_path)
+    with open(names_path, "r") as f:
+        india_sign_names = json.load(f)
+    print(f"India model loaded: {model_path} ({len(india_sign_names)} classes)")
     return True
 
 
@@ -86,41 +109,57 @@ def preprocess(img_bytes):
     if img is None:
         return None, None
     orig = img.copy()
-    img = cv2.resize(img, (32, 32))
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img = img.astype("float32") / 255.0
+    img  = cv2.resize(img, (32, 32))
+    img  = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img  = img.astype("float32") / 255.0
     return np.expand_dims(img, axis=0), orig
 
 
-def run_prediction(img_bytes):
-    """Returns top-3 predictions as list of dicts."""
+def run_prediction(img_bytes, dataset="german"):
+    """Returns top-3 predictions. dataset='german' or 'india'."""
     inp, _ = preprocess(img_bytes)
     if inp is None:
         return None
 
-    preds = model(inp, training=False).numpy()[0]
-    top3_idx = np.argsort(preds)[::-1][:3]
+    if dataset == "india":
+        if india_model is None:
+            return None
+        preds     = india_model(inp, training=False).numpy()[0]
+        names     = india_sign_names
+        descs     = None          # Indian dataset has no pre-written descriptions
+    else:
+        if german_model is None:
+            return None
+        preds = german_model(inp, training=False).numpy()[0]
+        names = german_sign_names
+        descs = german_sign_descriptions
 
-    results = []
+    top3_idx = np.argsort(preds)[::-1][:3]
+    results  = []
     for idx in top3_idx:
+        label = names[idx] if idx < len(names) else f"Class {idx}"
+        desc  = descs[idx] if (descs and idx < len(descs)) else f"Indian traffic sign: {label}"
         results.append({
             "class_id":    int(idx),
-            "label":       sign_names[idx],
-            "description": sign_descriptions[idx],
+            "label":       label,
+            "description": desc,
             "confidence":  round(float(preds[idx]) * 100, 2)
         })
     return results
 
 
-def run_gradcam(img_bytes):
+def run_gradcam(img_bytes, dataset="german"):
     """Returns base64-encoded Grad-CAM heatmap overlay PNG."""
     inp, orig = preprocess(img_bytes)
     if inp is None:
         return None
 
-    # Find last conv layer
+    mdl = india_model if dataset == "india" else german_model
+    if mdl is None:
+        return None
+
     last_conv_name = None
-    for layer in model.layers:
+    for layer in mdl.layers:
         if isinstance(layer, tf.keras.layers.Conv2D):
             last_conv_name = layer.name
 
@@ -128,26 +167,26 @@ def run_gradcam(img_bytes):
         return None
 
     grad_model = tf.keras.models.Model(
-        inputs=model.inputs,
-        outputs=[model.get_layer(last_conv_name).output, model.output]
+        inputs=mdl.inputs,
+        outputs=[mdl.get_layer(last_conv_name).output, mdl.output]
     )
 
     with tf.GradientTape() as tape:
         conv_out, predictions = grad_model(inp)
         top_class = tf.argmax(predictions[0])
-        loss = predictions[:, top_class]
+        loss      = predictions[:, top_class]
 
-    grads      = tape.gradient(loss, conv_out)
-    pooled     = tf.reduce_mean(grads, axis=(0, 1, 2))
-    conv_out   = conv_out[0]
-    heatmap    = conv_out @ pooled[..., tf.newaxis]
-    heatmap    = tf.squeeze(heatmap).numpy()
-    heatmap    = np.maximum(heatmap, 0)
-    mx         = heatmap.max()
+    grads    = tape.gradient(loss, conv_out)
+    pooled   = tf.reduce_mean(grads, axis=(0, 1, 2))
+    conv_out = conv_out[0]
+    heatmap  = conv_out @ pooled[..., tf.newaxis]
+    heatmap  = tf.squeeze(heatmap).numpy()
+    heatmap  = np.maximum(heatmap, 0)
+    mx       = heatmap.max()
     if mx > 0:
         heatmap /= mx
 
-    h, w = orig.shape[:2]
+    h, w            = orig.shape[:2]
     heatmap_resized = cv2.resize(heatmap, (w, h))
     heatmap_uint8   = np.uint8(255 * heatmap_resized)
     colored         = cv2.applyColorMap(heatmap_uint8, cv2.COLORMAP_JET)

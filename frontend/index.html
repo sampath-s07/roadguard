@@ -5,6 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RoadGuard v2 — Traffic Sign Recognition</title>
     <link rel="stylesheet" href="style.css" />
+    <style>
+        /* ── Dataset Toggle ── */
+        .dataset-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--card-bg);
+            border: 2px solid var(--border);
+            border-radius: 50px;
+            padding: 4px 6px;
+            font-size: 0.82rem;
+            font-weight: 600;
+        }
+        .dataset-toggle span { opacity: 0.6; }
+        .ds-btn {
+            padding: 4px 12px;
+            border-radius: 50px;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.8rem;
+            background: transparent;
+            color: var(--text);
+            transition: all 0.2s;
+        }
+        .ds-btn.active {
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(255,140,0,0.4);
+        }
+        .ds-badge {
+            display: inline-block;
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 50px;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        .ds-badge.german { background: #3b82f6; color: #fff; }
+        .ds-badge.india  { background: #f97316; color: #fff; }
+    </style>
 </head>
 <body>
 
@@ -15,7 +57,15 @@
         <span class="brand-name">RoadGuard <sup>v2</sup></span>
     </div>
     <div class="topbar-right">
-        <span class="accuracy-pill">97.7% accuracy</span>
+        <span class="accuracy-pill" id="accuracyPill">97.7% accuracy</span>
+
+        <!-- Dataset toggle -->
+        <div class="dataset-toggle" title="Switch between German (GTSRB) and Indian traffic sign datasets">
+            <span>🌍</span>
+            <button class="ds-btn active" id="dsGerman" onclick="setDataset('german')">German</button>
+            <button class="ds-btn"        id="dsIndia"  onclick="setDataset('india')">🇮🇳 India</button>
+        </div>
+
         <a href="gallery.html" class="gallery-link">🖼 Sign Gallery</a>
         <button id="soundToggle" class="theme-btn" title="Toggle sound alerts">🔔</button>
         <button id="themeToggle" class="theme-btn" title="Toggle dark mode">🌙</button>
@@ -73,7 +123,7 @@
                 <div class="result-top">
                     <div class="result-icon-wrap">✅</div>
                     <div>
-                        <div class="result-tag">Detected Sign</div>
+                        <div class="result-tag">Detected Sign <span class="ds-badge" id="r-dsbadge">German</span></div>
                         <div class="result-name" id="r-name">—</div>
                     </div>
                     <div class="conf-badge" id="r-badge">0%</div>
@@ -130,7 +180,7 @@
                 <div class="result-top">
                     <div class="result-icon-wrap">✅</div>
                     <div>
-                        <div class="result-tag">Detected Sign</div>
+                        <div class="result-tag">Detected Sign <span class="ds-badge" id="cam-dsbadge">German</span></div>
                         <div class="result-name" id="cam-name">—</div>
                     </div>
                     <div class="conf-badge" id="cam-badge">0%</div>
@@ -179,7 +229,7 @@
 
 <!-- ══════════════════ FOOTER ══════════════════ -->
 <footer class="footer">
-    <p>RoadGuard v2 · Custom CNN · 43 sign classes · GTSRB dataset · 97.7% test accuracy</p>
+    <p>RoadGuard v2 · Custom CNN · German (43 classes, 97.7%) &amp; Indian (58 classes, 90.7%) · GTSRB + Indian Dataset</p>
 </footer>
 
 <script src="script.js"></script>

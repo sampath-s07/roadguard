@@ -3,19 +3,22 @@
    Features: Upload, Webcam, Batch, History,
              Top-3, Grad-CAM, Dark mode,
              Drag-drop, Clipboard paste,
-             Sound alerts, CSV export, Toast errors
+             Sound alerts, CSV export, Toast errors,
+             German / India dataset toggle
    ===================================================== */
 
 const BACKEND = window.location.origin.includes("localhost")
     ? "http://localhost:5000"
     : window.location.origin;
-let currentFile  = null;
-let webcamStream = null;
-let history      = [];
-let soundEnabled = true;
-let batchApiResults = [];
 
-/* Dangerous class IDs — will trigger sound alert */
+let currentFile     = null;
+let webcamStream    = null;
+let history         = [];
+let soundEnabled    = true;
+let batchApiResults = [];
+let currentDataset  = "german";   // 'german' | 'india'
+
+/* Dangerous class IDs (German GTSRB) — will trigger sound alert */
 const DANGER_IDS = new Set([9,10,13,14,15,16,17,18,19,20,21,22,23,25,27,28,29,30,31]);
 
 /* ══ DOM refs — Upload ══ */
@@ -38,6 +41,7 @@ const resetBtn    = document.getElementById("resetBtn");
 const gradcamBtn  = document.getElementById("gradcamBtn");
 const gradcamWrap = document.getElementById("gradcamWrap");
 const gradcamImg  = document.getElementById("gradcamImg");
+const rDsBadge    = document.getElementById("r-dsbadge");
 
 /* ══ DOM refs — Webcam ══ */
 const webcamVideo    = document.getElementById("webcamVideo");
@@ -53,6 +57,7 @@ const camDesc        = document.getElementById("cam-desc");
 const camConf        = document.getElementById("cam-conf");
 const camBarFill     = document.getElementById("camBarFill");
 const camTop3List    = document.getElementById("camTop3List");
+const camDsBadge     = document.getElementById("cam-dsbadge");
 
 /* ══ DOM refs — Batch ══ */
 const batchDropZone    = document.getElementById("batchDropZone");
@@ -69,6 +74,20 @@ const soundToggle  = document.getElementById("soundToggle");
 const historyList  = document.getElementById("historyList");
 const clearHistBtn = document.getElementById("clearHistBtn");
 const toast        = document.getElementById("toast");
+const accuracyPill = document.getElementById("accuracyPill");
+
+/* ═══════════════════════════════════════════════
+   DATASET TOGGLE
+   ═══════════════════════════════════════════════ */
+window.setDataset = function(ds) {
+    currentDataset = ds;
+    document.getElementById("dsGerman").classList.toggle("active", ds === "german");
+    document.getElementById("dsIndia").classList.toggle("active",  ds === "india");
+    accuracyPill.textContent = ds === "india" ? "🇮🇳 90.7% accuracy (India)" : "97.7% accuracy";
+    showToast(ds === "india"
+        ? "🇮🇳 Switched to Indian Traffic Signs (58 classes)"
+        : "🌍 Switched to German Traffic Signs (43 classes)", "success");
+};
 
 /* ═══════════════════════════════════════════════
    TABS
@@ -120,7 +139,7 @@ function playDangerBeep() {
 }
 
 /* ═══════════════════════════════════════════════
-   TOAST NOTIFICATION (replaces alert())
+   TOAST NOTIFICATION
    ═══════════════════════════════════════════════ */
 let toastTimer;
 function showToast(msg, type = "") {
@@ -160,7 +179,6 @@ document.addEventListener("paste", e => {
         if (item.type.startsWith("image/")) {
             const file = item.getAsFile();
             if (file) {
-                /* Switch to upload tab */
                 document.querySelector('[data-tab="upload"]').click();
                 loadFile(file);
             }
@@ -210,19 +228,26 @@ analyzeBtn.addEventListener("click", async () => {
     hide(loadingDiv);
 
     if (!result || result.error) {
-        showToast(result?.error || "Cannot reach Flask backend on port 5000!", "error");
+        showToast(result?.error || "Cannot reach Flask backend!", "error");
         show(analyzeBtn);
         return;
     }
 
     const top = result.top[0];
+    const ds  = result.dataset || currentDataset;
+
+    /* Update dataset badge on result card */
+    if (rDsBadge) {
+        rDsBadge.textContent = ds === "india" ? "🇮🇳 India" : "🌍 German";
+        rDsBadge.className   = "ds-badge " + ds;
+    }
+
     displayResult(top, result.top,
         rName, rBadge, rDesc, rConf, barFill, top3List, confWarning);
     show(resultCard);
-    addHistory(top, "upload");
+    addHistory(top, "upload", ds);
 
-    /* Sound alert for dangerous signs */
-    if (DANGER_IDS.has(top.class_id)) {
+    if (ds === "german" && DANGER_IDS.has(top.class_id)) {
         playDangerBeep();
         showToast("⚠️ Warning sign detected!", "warning");
     }
@@ -264,7 +289,6 @@ startCamBtn.addEventListener("click", async () => {
 });
 
 captureBtn.addEventListener("click", async () => {
-    /* Capture frame from video */
     webcamCanvas.width  = webcamVideo.videoWidth;
     webcamCanvas.height = webcamVideo.videoHeight;
     webcamCanvas.getContext("2d").drawImage(webcamVideo, 0, 0);
@@ -284,11 +308,20 @@ captureBtn.addEventListener("click", async () => {
         }
 
         const top = result.top[0];
+        const ds  = result.dataset || currentDataset;
+
+        if (camDsBadge) {
+            camDsBadge.textContent = ds === "india" ? "🇮🇳 India" : "🌍 German";
+            camDsBadge.className   = "ds-badge " + ds;
+        }
+
         displayResult(top, result.top,
             camName, camBadge, camDesc, camConf, camBarFill, camTop3List, null);
         show(camResultCard);
-        addHistory(top, "webcam");
-        if (DANGER_IDS.has(top.class_id)) { playDangerBeep(); showToast("⚠️ Warning sign!", "warning"); }
+        addHistory(top, "webcam", ds);
+        if (ds === "german" && DANGER_IDS.has(top.class_id)) {
+            playDangerBeep(); showToast("⚠️ Warning sign!", "warning");
+        }
     }, "image/png");
 });
 
@@ -346,6 +379,7 @@ batchAnalyzeBtn.addEventListener("click", async () => {
 
     const form = new FormData();
     batchFiles.forEach(f => form.append("files", f));
+    form.append("dataset", currentDataset);
 
     let result;
     try {
@@ -382,7 +416,7 @@ batchAnalyzeBtn.addEventListener("click", async () => {
                     <div class="batch-fname">${r.filename}</div>
                 </div>
                 <div class="batch-conf">${r.confidence}%</div>`;
-            addHistory({ label: r.label, confidence: r.confidence, description: r.description }, "batch");
+            addHistory({ label: r.label, confidence: r.confidence, description: r.description }, "batch", currentDataset);
         }
         batchResults.appendChild(row);
     });
@@ -411,9 +445,9 @@ csvDownloadBtn.addEventListener("click", () => {
 /* ═══════════════════════════════════════════════
    HISTORY
    ═══════════════════════════════════════════════ */
-function addHistory(top, source) {
+function addHistory(top, source, ds) {
     const time = new Date().toLocaleTimeString();
-    history.unshift({ ...top, time, source });
+    history.unshift({ ...top, time, source, dataset: ds });
     renderHistory();
 }
 
@@ -427,8 +461,9 @@ function renderHistory() {
         const item = document.createElement("div");
         item.className = "history-item";
         const srcIcon = h.source === "webcam" ? "🎥" : h.source === "batch" ? "📁" : "📷";
+        const dsTag   = h.dataset === "india" ? " 🇮🇳" : "";
         item.innerHTML = `
-            <div class="hist-label">🚦 ${h.label}</div>
+            <div class="hist-label">🚦 ${h.label}${dsTag}</div>
             <div class="hist-meta">
                 <span class="hist-conf">${h.confidence}%</span>
                 <span>${srcIcon} ${h.source}</span>
@@ -452,6 +487,7 @@ function hide(el) { el?.classList.add("hidden"); }
 async function postImage(url, fieldName, file, filename) {
     const form = new FormData();
     form.append(fieldName, file, filename || file.name || "image.png");
+    form.append("dataset", currentDataset);    // always send current dataset
     try {
         const res = await fetch(url, { method: "POST", body: form });
         return await res.json();

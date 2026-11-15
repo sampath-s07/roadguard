@@ -3,21 +3,27 @@ from flask_cors import CORS
 import os, sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from backend.model_loader import load_model, run_prediction, run_gradcam
+from backend.model_loader import load_model, load_india_model, run_prediction, run_gradcam
 
 app = Flask(__name__, static_folder="../frontend", static_url_path="")
 CORS(app)
 
-MODEL = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "saved_models", "custom_cnn.h5"
-)
+BASE        = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+GERMAN_MODEL = os.path.join(BASE, "saved_models", "custom_cnn.h5")
+INDIA_MODEL  = os.path.join(BASE, "saved_models", "india_cnn.h5")
+INDIA_NAMES  = os.path.join(BASE, "saved_models", "india_sign_names.json")
 
-ok = load_model(MODEL)
-if not ok:
-    print("WARNING: model load failed.")
+# Load both models at startup
+ok_de = load_model(GERMAN_MODEL)
+ok_in = load_india_model(INDIA_MODEL, INDIA_NAMES)
+
+if not ok_de:
+    print("WARNING: German model load failed.")
+if not ok_in:
+    print("WARNING: India model load failed (optional).")
 
 
+# ── PAGES ──────────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
     return send_from_directory(app.static_folder, "index.html")
@@ -26,11 +32,21 @@ def index():
 def gallery():
     return send_from_directory(app.static_folder, "gallery.html")
 
+
+# ── STATUS ─────────────────────────────────────────────────────────────────────
 @app.route("/status")
 def status():
-    return jsonify({"status": "RoadGuard API running", "version": "2.0"})
+    return jsonify({
+        "status":  "RoadGuard API running",
+        "version": "2.0",
+        "models": {
+            "german": ok_de,
+            "india":  ok_in
+        }
+    })
 
 
+# ── PREDICT ────────────────────────────────────────────────────────────────────
 @app.route("/predict", methods=["POST"])
 def predict():
     if "file" not in request.files:
@@ -39,26 +55,29 @@ def predict():
     if f.filename == "":
         return jsonify({"error": "empty filename"}), 400
 
+    dataset = request.form.get("dataset", "german")   # 'german' or 'india'
     raw     = f.read()
-    results = run_prediction(raw)
+    results = run_prediction(raw, dataset=dataset)
     if results is None:
         return jsonify({"error": "could not process image"}), 500
 
     top = results[0]
-    print(f"predicted: {top['label']} ({top['confidence']}%)")
-    return jsonify({"top": results})
+    print(f"[{dataset}] predicted: {top['label']} ({top['confidence']}%)")
+    return jsonify({"top": results, "dataset": dataset})
 
 
+# ── PREDICT BATCH ──────────────────────────────────────────────────────────────
 @app.route("/predict_batch", methods=["POST"])
 def predict_batch():
     files = request.files.getlist("files")
     if not files:
         return jsonify({"error": "no files uploaded"}), 400
 
-    output = []
+    dataset = request.form.get("dataset", "german")
+    output  = []
     for f in files:
         raw     = f.read()
-        results = run_prediction(raw)
+        results = run_prediction(raw, dataset=dataset)
         if results is None:
             output.append({"filename": f.filename, "error": "could not process"})
         else:
@@ -70,16 +89,18 @@ def predict_batch():
                 "confidence":  top["confidence"],
                 "top3":        results
             })
-    return jsonify({"results": output})
+    return jsonify({"results": output, "dataset": dataset})
 
 
+# ── GRAD-CAM ───────────────────────────────────────────────────────────────────
 @app.route("/gradcam", methods=["POST"])
 def gradcam():
     if "file" not in request.files:
         return jsonify({"error": "no image file"}), 400
-    f   = request.files["file"]
-    raw = f.read()
-    b64 = run_gradcam(raw)
+    f       = request.files["file"]
+    dataset = request.form.get("dataset", "german")
+    raw     = f.read()
+    b64     = run_gradcam(raw, dataset=dataset)
     if b64 is None:
         return jsonify({"error": "gradcam failed"}), 500
     return jsonify({"image": b64})
