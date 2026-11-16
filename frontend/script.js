@@ -545,6 +545,129 @@ clearHistBtn.addEventListener("click", () => {
 });
 
 /* ═══════════════════════════════════════════════
+   VIDEO PROCESSING
+   ═══════════════════════════════════════════════ */
+const videoDropZone   = document.getElementById("videoDropZone");
+const videoInput      = document.getElementById("videoInput");
+const videoFileInfo   = document.getElementById("videoFileInfo");
+const videoFileName   = document.getElementById("videoFileName");
+const videoClearBtn   = document.getElementById("videoClearBtn");
+const videoAnalyzeBtn = document.getElementById("videoAnalyzeBtn");
+const videoLoadingDiv = document.getElementById("videoLoadingDiv");
+const videoResult     = document.getElementById("videoResult");
+const videoStats      = document.getElementById("videoStats");
+const videoCollage    = document.getElementById("videoCollage");
+const videoSummary    = document.getElementById("videoSummary");
+const videoTimeline   = document.getElementById("videoTimeline");
+const videoResetBtn   = document.getElementById("videoResetBtn");
+
+let currentVideo = null;
+
+videoDropZone.addEventListener("click", () => videoInput.click());
+videoDropZone.addEventListener("dragover", e => { e.preventDefault(); videoDropZone.classList.add("drag-over"); });
+videoDropZone.addEventListener("dragleave", () => videoDropZone.classList.remove("drag-over"));
+videoDropZone.addEventListener("drop", e => {
+    e.preventDefault();
+    videoDropZone.classList.remove("drag-over");
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith("video/")) loadVideo(file);
+});
+videoInput.addEventListener("change", e => { if (e.target.files[0]) loadVideo(e.target.files[0]); });
+
+function loadVideo(file) {
+    if (file.size > 50 * 1024 * 1024) {
+        showToast("Video too large! Max 50 MB.", "error"); return;
+    }
+    currentVideo = file;
+    videoFileName.textContent = file.name;
+    show(videoFileInfo);
+    show(videoAnalyzeBtn);
+    hide(videoDropZone);
+    hide(videoResult);
+}
+
+function resetVideo() {
+    currentVideo = null;
+    videoInput.value = "";
+    show(videoDropZone);
+    hide(videoFileInfo);
+    hide(videoAnalyzeBtn);
+    hide(videoResult);
+    hide(videoLoadingDiv);
+}
+videoClearBtn.addEventListener("click", resetVideo);
+videoResetBtn.addEventListener("click", resetVideo);
+
+videoAnalyzeBtn.addEventListener("click", async () => {
+    if (!currentVideo) return;
+    hide(videoAnalyzeBtn);
+    show(videoLoadingDiv);
+    hide(videoResult);
+
+    const form = new FormData();
+    form.append("file", currentVideo);
+    form.append("dataset", currentDataset);
+
+    let result;
+    try {
+        const res = await fetch(BACKEND + "/process_video", { method: "POST", body: form });
+        result = await res.json();
+    } catch {
+        hide(videoLoadingDiv);
+        show(videoAnalyzeBtn);
+        showToast("Video processing failed — backend not reachable.", "error");
+        return;
+    }
+
+    hide(videoLoadingDiv);
+
+    if (result.error) {
+        showToast("Error: " + result.error, "error");
+        show(videoAnalyzeBtn);
+        return;
+    }
+
+    // ── Stats pills ──
+    videoStats.innerHTML = `
+        <div class="video-stat-pill">⏱ ${result.duration}s</div>
+        <div class="video-stat-pill">🎞 ${result.total_frames} frames</div>
+        <div class="video-stat-pill">🔍 ${result.sampled} sampled</div>
+        <div class="video-stat-pill">🚦 ${Object.keys(result.summary).length} unique signs</div>`;
+
+    // ── Collage ──
+    if (result.thumbnail) {
+        videoCollage.src = "data:image/jpeg;base64," + result.thumbnail;
+        show(videoCollage);
+    }
+
+    // ── Summary chips ──
+    videoSummary.innerHTML = "";
+    const sorted = Object.entries(result.summary).sort((a, b) => b[1] - a[1]);
+    sorted.forEach(([label, count]) => {
+        const chip = document.createElement("div");
+        chip.className = "video-sign-chip";
+        chip.innerHTML = `🚦 ${label} <span class="video-sign-count">${count}×</span>`;
+        videoSummary.appendChild(chip);
+        addHistory({ label, confidence: 0, description: "" }, "video", currentDataset);
+    });
+
+    // ── Timeline ──
+    videoTimeline.innerHTML = "";
+    result.detections.forEach(d => {
+        const item = document.createElement("div");
+        item.className = "video-tl-item";
+        item.innerHTML = `
+            <div class="video-tl-time">${d.time_str}</div>
+            <div class="video-tl-label">🚦 ${d.label}</div>
+            <div class="video-tl-conf">${d.confidence}%</div>`;
+        videoTimeline.appendChild(item);
+    });
+
+    show(videoResult);
+    showToast(`🎬 Found ${Object.keys(result.summary).length} unique sign type(s)!`, "success");
+});
+
+/* ═══════════════════════════════════════════════
    HELPERS
    ═══════════════════════════════════════════════ */
 function show(el) { el?.classList.remove("hidden"); }

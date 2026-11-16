@@ -3,8 +3,9 @@ from flask_cors import CORS
 import os, sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from backend.model_loader  import load_model, load_india_model, run_prediction, run_gradcam
-from backend.yolo_detector import load_yolo, detect_and_classify
+from backend.model_loader   import load_model, load_india_model, run_prediction, run_gradcam
+from backend.yolo_detector  import load_yolo, detect_and_classify
+from backend.video_processor import process_video
 
 app = Flask(__name__, static_folder="../frontend", static_url_path="")
 CORS(app)
@@ -13,15 +14,16 @@ BASE         = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GERMAN_MODEL = os.path.join(BASE, "saved_models", "custom_cnn.h5")
 INDIA_MODEL  = os.path.join(BASE, "saved_models", "india_cnn.h5")
 INDIA_NAMES  = os.path.join(BASE, "saved_models", "india_sign_names.json")
+YOLO_ONNX    = os.path.join(BASE, "saved_models", "yolov8n.onnx")
 
-# Load models at startup
+# Load all models at startup
 ok_de   = load_model(GERMAN_MODEL)
 ok_in   = load_india_model(INDIA_MODEL, INDIA_NAMES)
-ok_yolo = load_yolo()
+ok_yolo = load_yolo(YOLO_ONNX)
 
 if not ok_de:   print("WARNING: German model load failed.")
-if not ok_in:   print("WARNING: India model load failed (optional).")
-if not ok_yolo: print("WARNING: YOLOv8 not available (pip install ultralytics).")
+if not ok_in:   print("WARNING: India model load failed.")
+if not ok_yolo: print("WARNING: YOLOv8 not available.")
 
 
 # ── PAGES ──────────────────────────────────────────────────────────────────────
@@ -40,15 +42,11 @@ def status():
     return jsonify({
         "status":  "RoadGuard API running",
         "version": "2.0",
-        "models": {
-            "german": ok_de,
-            "india":  ok_in,
-            "yolo":   ok_yolo
-        }
+        "models":  {"german": ok_de, "india": ok_in, "yolo": ok_yolo}
     })
 
 
-# ── PREDICT (single image, classify) ──────────────────────────────────────────
+# ── PREDICT ────────────────────────────────────────────────────────────────────
 @app.route("/predict", methods=["POST"])
 def predict():
     if "file" not in request.files:
@@ -58,39 +56,55 @@ def predict():
         return jsonify({"error": "empty filename"}), 400
 
     dataset = request.form.get("dataset", "german")
-    raw     = f.read()
-    results = run_prediction(raw, dataset=dataset)
+    results = run_prediction(f.read(), dataset=dataset)
     if results is None:
         return jsonify({"error": "could not process image"}), 500
 
     top = results[0]
-    print(f"[{dataset}] predicted: {top['label']} ({top['confidence']}%)")
+    print(f"[{dataset}] {top['label']} ({top['confidence']}%)")
     return jsonify({"top": results, "dataset": dataset})
 
 
-# ── DETECT (YOLOv8 bounding boxes + CNN classify) ─────────────────────────────
+# ── DETECT (YOLOv8) ────────────────────────────────────────────────────────────
 @app.route("/detect", methods=["POST"])
 def detect():
     if not ok_yolo:
-        return jsonify({"error": "YOLOv8 not installed on server. Run: pip install ultralytics"}), 503
+        return jsonify({"error": "YOLOv8 ONNX not loaded on server"}), 503
     if "file" not in request.files:
         return jsonify({"error": "no image file"}), 400
 
-    f       = request.files["file"]
     dataset = request.form.get("dataset", "german")
-    raw     = f.read()
-
-    b64, detections = detect_and_classify(raw, run_prediction, dataset=dataset)
+    b64, detections = detect_and_classify(
+        request.files["file"].read(), run_prediction, dataset=dataset)
     if b64 is None:
         return jsonify({"error": "detection failed"}), 500
 
-    print(f"[yolo/{dataset}] {len(detections)} object(s) detected")
-    return jsonify({
-        "image":      b64,          # annotated image base64
-        "detections": detections,   # list of boxes + labels
-        "count":      len(detections),
-        "dataset":    dataset
-    })
+    print(f"[yolo/{dataset}] {len(detections)} object(s)")
+    return jsonify({"image": b64, "detections": detections,
+                    "count": len(detections), "dataset": dataset})
+
+
+# ── VIDEO PROCESSING ───────────────────────────────────────────────────────────
+@app.route("/process_video", methods=["POST"])
+def process_video_route():
+    if "file" not in request.files:
+        return jsonify({"error": "no video file"}), 400
+
+    f       = request.files["file"]
+    dataset = request.form.get("dataset", "german")
+
+    # Size check: max 50 MB
+    video_bytes = f.read()
+    if len(video_bytes) > 50 * 1024 * 1024:
+        return jsonify({"error": "Video too large (max 50 MB)"}), 413
+
+    result = process_video(video_bytes, run_prediction, dataset=dataset)
+    if "error" in result:
+        return jsonify(result), 500
+
+    print(f"[video/{dataset}] {result['sampled']} frames, "
+          f"{len(result['summary'])} unique signs")
+    return jsonify(result)
 
 
 # ── PREDICT BATCH ──────────────────────────────────────────────────────────────
@@ -103,8 +117,7 @@ def predict_batch():
     dataset = request.form.get("dataset", "german")
     output  = []
     for f in files:
-        raw     = f.read()
-        results = run_prediction(raw, dataset=dataset)
+        results = run_prediction(f.read(), dataset=dataset)
         if results is None:
             output.append({"filename": f.filename, "error": "could not process"})
         else:
@@ -126,8 +139,7 @@ def gradcam():
         return jsonify({"error": "no image file"}), 400
     f       = request.files["file"]
     dataset = request.form.get("dataset", "german")
-    raw     = f.read()
-    b64     = run_gradcam(raw, dataset=dataset)
+    b64     = run_gradcam(f.read(), dataset=dataset)
     if b64 is None:
         return jsonify({"error": "gradcam failed"}), 500
     return jsonify({"image": b64})

@@ -586,3 +586,114 @@ body {
 .detect-label { font-weight: 700; font-size: 0.9rem; color: var(--text); }
 .detect-sub   { font-size: 0.75rem; color: var(--text2); }
 .detect-pct   { font-weight: 700; color: #7c3aed; font-size: 0.9rem; }
+
+/* ══════════════════ VIDEO TAB STYLES ══════════════════ */
+.video-file-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 16px;
+    margin: 10px 0;
+    font-weight: 600;
+    color: var(--text);
+}
+.video-icon { font-size: 1.4rem; }
+
+.video-result {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.video-stats {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.video-stat-pill {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 50px;
+    padding: 5px 14px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.video-section-title {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text);
+    margin-top: 4px;
+}
+
+.video-collage {
+    width: 100%;
+    border-radius: 12px;
+    border: 2px solid var(--border);
+    display: block;
+}
+
+.video-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.video-sign-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 50px;
+    padding: 5px 12px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+}
+.video-sign-count {
+    background: var(--accent);
+    color: #fff;
+    border-radius: 50px;
+    padding: 1px 8px;
+    font-size: 0.75rem;
+}
+
+.video-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+.video-tl-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--hist-bg);
+    border-radius: 10px;
+    padding: 7px 12px;
+    border: 1px solid var(--border);
+    font-size: 0.85rem;
+}
+.video-tl-time {
+    font-weight: 700;
+    color: var(--accent);
+    min-width: 36px;
+    font-size: 0.8rem;
+}
+.video-tl-label {
+    flex: 1;
+    font-weight: 600;
+    color: var(--text);
+}
+.video-tl-conf {
+    font-weight: 700;
+    color: var(--text2);
+    font-size: 0.8rem;
+}

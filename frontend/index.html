@@ -86,6 +86,7 @@
             <button class="tab active" data-tab="upload">📷 Upload</button>
             <button class="tab" data-tab="webcam">🎥 Webcam</button>
             <button class="tab" data-tab="batch">📁 Batch</button>
+            <button class="tab" data-tab="video">🎬 Video</button>
         </div>
 
         <!-- ══ TAB: UPLOAD ══ -->
@@ -224,6 +225,37 @@
             </div>
             <div class="batch-results hidden" id="batchResults"></div>
             <button class="btn-secondary hidden" id="csvDownloadBtn">📄 Download CSV</button>
+        </div>
+
+        <!-- ══ TAB: VIDEO ══ -->
+        <div class="tab-panel hidden" id="tab-video">
+            <div class="drop-zone" id="videoDropZone">
+                <div class="dz-icon">🎬</div>
+                <p class="dz-title">Upload a video</p>
+                <p class="dz-sub">or <span class="dz-browse">browse to upload</span></p>
+                <small>MP4 · AVI · MOV · Max 50 MB</small>
+                <input type="file" id="videoInput" accept="video/*" hidden />
+            </div>
+            <div id="videoFileInfo" class="video-file-info hidden">
+                <span class="video-icon">🎬</span>
+                <span id="videoFileName">video.mp4</span>
+                <button class="btn-clear" id="videoClearBtn">✕</button>
+            </div>
+            <button class="btn-primary hidden" id="videoAnalyzeBtn">🔍 Analyze Video</button>
+            <div class="loading hidden" id="videoLoadingDiv">
+                <div class="spinner"></div>
+                <p>Processing video frames… may take 30–60 seconds ⏳</p>
+            </div>
+            <div class="video-result hidden" id="videoResult">
+                <div class="video-stats" id="videoStats"></div>
+                <div class="video-section-title">🖼️ Frame Samples</div>
+                <img id="videoCollage" class="video-collage" src="" alt="collage" />
+                <div class="video-section-title">📊 Signs Detected</div>
+                <div id="videoSummary" class="video-summary"></div>
+                <div class="video-section-title">🕐 Timeline</div>
+                <div id="videoTimeline" class="video-timeline"></div>
+                <button class="btn-secondary" id="videoResetBtn">↩ Try Another Video</button>
+            </div>
         </div>
 
     </main>
