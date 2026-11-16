@@ -242,7 +242,8 @@ detectBtn.addEventListener("click", async () => {
     detectBtn.disabled    = false;
 
     if (!result || result.error) {
-        showToast(result?.error || "Detection failed!", "error");
+        const msg = result?.error || "Detection failed!";
+        showToast("⚠️ " + msg, "error");
         return;
     }
 
