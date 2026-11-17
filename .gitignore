@@ -17,6 +17,7 @@ env/
 
 # Generated plot files
 *.png
+!frontend/*.png
 *.csv
 
 # VS Code

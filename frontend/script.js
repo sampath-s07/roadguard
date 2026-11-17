@@ -1126,3 +1126,40 @@ async function loadCloudHistory() {
         }
     } catch {}
 }
+
+
+/* ═══════════════════════════════════════════════
+   PWA & MOBILE APP INSTALLATION CONTROLLER
+   ═══════════════════════════════════════════════ */
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/sw.js")
+            .then(reg => console.log("✅ RoadGuard PWA ServiceWorker registered:", reg.scope))
+            .catch(err => console.log("⚠️ PWA ServiceWorker registration failed:", err));
+    });
+}
+
+let deferredPrompt = null;
+const btnInstallApp = document.getElementById("btnInstallApp");
+
+window.addEventListener("beforeinstallprompt", e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (btnInstallApp) {
+        show(btnInstallApp);
+    }
+});
+
+btnInstallApp?.addEventListener("click", async () => {
+    if (!deferredPrompt) {
+        showToast("To install on iOS: Tap Share -> Add to Home Screen 📲", "info");
+        return;
+    }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") {
+        showToast("🎉 RoadGuard installed to your home screen!", "success");
+        hide(btnInstallApp);
+    }
+    deferredPrompt = null;
+});

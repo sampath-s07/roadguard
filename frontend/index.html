@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RoadGuard v2 — Traffic Sign Recognition</title>
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#0284c7" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -69,6 +74,7 @@
         </div>
 
         <a href="gallery.html" class="gallery-link">🖼 Sign Gallery</a>
+        <button id="btnInstallApp" class="auth-btn hidden" style="background: linear-gradient(135deg, #10b981, #059669);">📲 Install App</button>
         <button id="btnOpenAuth" class="auth-btn">🔑 Sign In</button>
         <div id="userBadge" class="user-badge hidden">
             <span>👤 <strong id="userNameDisplay">Driver</strong></span>

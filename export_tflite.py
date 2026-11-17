@@ -1,70 +1,55 @@
 """
 export_tflite.py
-Converts the trained Keras model to TensorFlow Lite format.
+Converts both German and Indian trained Keras models to TensorFlow Lite format for Android/iOS.
 Run: python export_tflite.py
-Output: saved_models/custom_cnn.tflite  (~400KB, optimized)
 """
 
 import tensorflow as tf
 import os
 
-MODEL_PATH  = os.path.join("saved_models", "custom_cnn.h5")
-TFLITE_PATH = os.path.join("saved_models", "custom_cnn.tflite")
-TFLITE_Q    = os.path.join("saved_models", "custom_cnn_quant.tflite")
+MODELS = [
+    {
+        "name":   "German GTSRB (43 classes)",
+        "h5":     os.path.join("saved_models", "custom_cnn.h5"),
+        "tflite": os.path.join("saved_models", "custom_cnn.tflite"),
+        "quant":  os.path.join("saved_models", "custom_cnn_quant.tflite")
+    },
+    {
+        "name":   "Indian Signs (58 classes)",
+        "h5":     os.path.join("saved_models", "india_cnn.h5"),
+        "tflite": os.path.join("saved_models", "india_cnn.tflite"),
+        "quant":  os.path.join("saved_models", "india_cnn_quant.tflite")
+    }
+]
 
 
-def export(quantize=False):
-    if not os.path.exists(MODEL_PATH):
-        print(f"ERROR: model not found at {MODEL_PATH}")
-        print("Run main.py first to train and save the model.")
-        return
+def convert_model(h5_path, out_path, quantize=False):
+    if not os.path.exists(h5_path):
+        print(f"⚠️ Warning: Model not found at {h5_path}")
+        return None
 
-    print(f"Loading model from {MODEL_PATH} ...")
-    model = tf.keras.models.load_model(MODEL_PATH)
-    print("Model loaded. Converting to TFLite ...")
-
+    model = tf.keras.models.load_model(h5_path)
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
-
     if quantize:
-        # Dynamic range quantization — 4x smaller, slightly lower accuracy
         converter.optimizations = [tf.lite.Optimize.DEFAULT]
-        out_path = TFLITE_Q
-    else:
-        out_path = TFLITE_PATH
 
-    tflite_model = converter.convert()
-
-    os.makedirs("saved_models", exist_ok=True)
+    tflite_bytes = converter.convert()
     with open(out_path, "wb") as f:
-        f.write(tflite_model)
+        f.write(tflite_bytes)
 
     size_kb = os.path.getsize(out_path) / 1024
-    print(f"\n✅ Saved: {out_path}")
-    print(f"   Size : {size_kb:.1f} KB")
-    print("\nUse this file on Android / iOS / Raspberry Pi!")
+    print(f"  -> Generated: {out_path} ({size_kb:.1f} KB)")
     return out_path
 
 
 if __name__ == "__main__":
-    print("=" * 50)
-    print("RoadGuard — TensorFlow Lite Export")
-    print("=" * 50)
+    print("=" * 60)
+    print("RoadGuard — Mobile TensorFlow Lite Model Export")
+    print("=" * 60)
 
-    # Standard export
-    export(quantize=False)
+    for item in MODELS:
+        print(f"\nProcessing {item['name']}...")
+        convert_model(item["h5"], item["tflite"], quantize=False)
+        convert_model(item["h5"], item["quant"], quantize=True)
 
-    # Quantized (smaller) export
-    print("\nAlso creating quantized version (smaller) ...")
-    export(quantize=True)
-
-    orig_kb  = os.path.getsize(TFLITE_PATH)  / 1024
-    quant_kb = os.path.getsize(TFLITE_Q)     / 1024
-    h5_kb    = os.path.getsize(MODEL_PATH)   / 1024
-
-    print("\n" + "=" * 50)
-    print(f"{'Model':<30} {'Size':>10}")
-    print("-" * 40)
-    print(f"{'custom_cnn.h5 (original)':<30} {h5_kb:>8.0f} KB")
-    print(f"{'custom_cnn.tflite':<30} {orig_kb:>8.0f} KB")
-    print(f"{'custom_cnn_quant.tflite':<30} {quant_kb:>8.0f} KB")
-    print("=" * 50)
+    print("\n✅ Mobile TFLite models exported successfully to saved_models/!")
