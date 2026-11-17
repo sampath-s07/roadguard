@@ -1,14 +1,19 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, session
 from flask_cors import CORS
 import os, sys, json, time
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from backend.model_loader   import load_model, load_india_model, run_prediction, run_gradcam
-from backend.yolo_detector  import load_yolo, detect_and_classify
-from backend.video_processor import process_video
+from backend.model_loader    import load_model, load_india_model, run_prediction, run_gradcam
+from backend.yolo_detector   import load_yolo, detect_and_classify
+from backend.video_processor  import process_video
+from backend.auth_db         import (
+    init_db, register_user, authenticate_user,
+    log_user_detection, get_user_history
+)
 
 app = Flask(__name__, static_folder="../frontend", static_url_path="")
-CORS(app)
+app.secret_key = os.environ.get("SECRET_KEY", "roadguard_super_secret_session_key_2026")
+CORS(app, supports_credentials=True)
 
 BASE          = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GERMAN_MODEL  = os.path.join(BASE, "saved_models", "custom_cnn.h5")
@@ -16,6 +21,9 @@ INDIA_MODEL   = os.path.join(BASE, "saved_models", "india_cnn.h5")
 INDIA_NAMES   = os.path.join(BASE, "saved_models", "india_sign_names.json")
 YOLO_ONNX     = os.path.join(BASE, "saved_models", "yolov8n.onnx")
 LOCATION_FILE = os.path.join(BASE, "saved_models", "sign_locations.json")
+
+# Initialize database
+init_db()
 
 # Load all models at startup
 ok_de   = load_model(GERMAN_MODEL)
@@ -39,7 +47,6 @@ def get_locations():
 def save_location_entry(entry):
     locations = get_locations()
     locations.insert(0, entry)
-    # keep last 100 markers
     locations = locations[:100]
     with open(LOCATION_FILE, "w") as f:
         json.dump(locations, f, indent=2)
@@ -66,6 +73,68 @@ def status():
     })
 
 
+# ── AUTHENTICATION API ─────────────────────────────────────────────────────────
+@app.route("/api/auth/register", methods=["POST"])
+def auth_register():
+    data = request.get_json(silent=True) or request.form.to_dict()
+    username = data.get("username", "")
+    email    = data.get("email", "")
+    password = data.get("password", "")
+
+    res = register_user(username, email, password)
+    if "error" in res:
+        return jsonify(res), 400
+
+    session["user_id"]  = res["user"]["id"]
+    session["username"] = res["user"]["username"]
+    session["email"]    = res["user"]["email"]
+    return jsonify(res)
+
+
+@app.route("/api/auth/login", methods=["POST"])
+def auth_login():
+    data = request.get_json(silent=True) or request.form.to_dict()
+    identifier = data.get("username", "") or data.get("email", "")
+    password   = data.get("password", "")
+
+    res = authenticate_user(identifier, password)
+    if "error" in res:
+        return jsonify(res), 401
+
+    session["user_id"]  = res["user"]["id"]
+    session["username"] = res["user"]["username"]
+    session["email"]    = res["user"]["email"]
+    return jsonify(res)
+
+
+@app.route("/api/auth/logout", methods=["POST", "GET"])
+def auth_logout():
+    session.clear()
+    return jsonify({"success": True, "message": "Logged out successfully"})
+
+
+@app.route("/api/auth/me", methods=["GET"])
+def auth_me():
+    if "user_id" in session:
+        return jsonify({
+            "authenticated": True,
+            "user": {
+                "id":       session["user_id"],
+                "username": session["username"],
+                "email":    session["email"]
+            }
+        })
+    return jsonify({"authenticated": False})
+
+
+@app.route("/api/auth/history", methods=["GET"])
+def auth_history():
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    records = get_user_history(session["user_id"])
+    return jsonify({"history": records})
+
+
 # ── PREDICT ────────────────────────────────────────────────────────────────────
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -85,6 +154,13 @@ def predict():
 
     top = results[0]
     print(f"[{dataset}] {top['label']} ({top['confidence']}%)")
+
+    # Log to user history if logged in
+    if "user_id" in session:
+        try:
+            log_user_detection(session["user_id"], top["label"], top["confidence"], dataset)
+        except Exception as e:
+            print("User detection log error:", e)
 
     # Geotag if location provided
     if lat_val and lng_val:

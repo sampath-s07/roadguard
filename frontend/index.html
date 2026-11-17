@@ -69,6 +69,11 @@
         </div>
 
         <a href="gallery.html" class="gallery-link">🖼 Sign Gallery</a>
+        <button id="btnOpenAuth" class="auth-btn">🔑 Sign In</button>
+        <div id="userBadge" class="user-badge hidden">
+            <span>👤 <strong id="userNameDisplay">Driver</strong></span>
+            <button id="btnLogout" class="theme-btn" title="Sign Out">🚪</button>
+        </div>
         <button id="soundToggle" class="theme-btn" title="Toggle sound alerts">🔔</button>
         <button id="themeToggle" class="theme-btn" title="Toggle dark mode">🌙</button>
     </div>
@@ -308,6 +313,36 @@
 <footer class="footer">
     <p>RoadGuard v2 · Custom CNN · German (43 classes, 97.7%) &amp; Indian (58 classes, 90.7%) · GTSRB + Indian Dataset</p>
 </footer>
+
+<!-- ══════════════════ AUTH MODAL ══════════════════ -->
+<div id="authModal" class="modal-overlay hidden">
+    <div class="modal-card">
+        <button class="modal-close" id="btnCloseAuth">✕</button>
+        <div class="modal-tabs">
+            <button class="modal-tab active" id="tabLoginBtn">Sign In</button>
+            <button class="modal-tab" id="tabRegisterBtn">Create Account</button>
+        </div>
+
+        <!-- LOGIN FORM -->
+        <form id="loginForm" class="auth-form">
+            <h3 style="margin:0 0 6px 0; color:var(--text);">Welcome to RoadGuard</h3>
+            <p class="auth-sub">Sign in to save and sync your traffic sign detections</p>
+            <input type="text" id="loginUsername" placeholder="Username or Email" required class="auth-input" />
+            <input type="password" id="loginPassword" placeholder="Password" required class="auth-input" />
+            <button type="submit" class="btn-primary" style="width:100%;margin-top:10px;">Sign In</button>
+        </form>
+
+        <!-- REGISTER FORM -->
+        <form id="registerForm" class="auth-form hidden">
+            <h3 style="margin:0 0 6px 0; color:var(--text);">Create Driver Account</h3>
+            <p class="auth-sub">Join RoadGuard to log road hazards & telemetry</p>
+            <input type="text" id="regUsername" placeholder="Choose Username" required class="auth-input" />
+            <input type="email" id="regEmail" placeholder="Email Address" required class="auth-input" />
+            <input type="password" id="regPassword" placeholder="Password (min 4 characters)" required class="auth-input" />
+            <button type="submit" class="btn-primary" style="width:100%;margin-top:10px;">Register</button>
+        </form>
+    </div>
+</div>
 
 <script src="script.js"></script>
 </body>

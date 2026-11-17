@@ -974,3 +974,155 @@ document.getElementById("btnMapExport")?.addEventListener("click", () => {
     URL.revokeObjectURL(url);
     showToast("Downloaded GeoJSON file!", "success");
 });
+
+
+/* ═══════════════════════════════════════════════
+   USER AUTHENTICATION CONTROLLER
+   ═══════════════════════════════════════════════ */
+const authModal      = document.getElementById("authModal");
+const btnOpenAuth    = document.getElementById("btnOpenAuth");
+const btnCloseAuth   = document.getElementById("btnCloseAuth");
+const tabLoginBtn    = document.getElementById("tabLoginBtn");
+const tabRegisterBtn = document.getElementById("tabRegisterBtn");
+const loginForm      = document.getElementById("loginForm");
+const registerForm   = document.getElementById("registerForm");
+const userBadge      = document.getElementById("userBadge");
+const userNameDisplay= document.getElementById("userNameDisplay");
+const btnLogout      = document.getElementById("btnLogout");
+
+let currentUser = null;
+
+// Check existing user session on load
+async function checkAuthSession() {
+    try {
+        const res = await fetch(BACKEND + "/api/auth/me", { credentials: "include" });
+        const data = await res.json();
+        if (data.authenticated && data.user) {
+            setUserLoggedIn(data.user);
+            loadCloudHistory();
+        } else {
+            setUserLoggedOut();
+        }
+    } catch {
+        setUserLoggedOut();
+    }
+}
+checkAuthSession();
+
+function setUserLoggedIn(user) {
+    currentUser = user;
+    userNameDisplay.textContent = user.username;
+    show(userBadge);
+    hide(btnOpenAuth);
+}
+
+function setUserLoggedOut() {
+    currentUser = null;
+    hide(userBadge);
+    show(btnOpenAuth);
+}
+
+btnOpenAuth?.addEventListener("click", () => {
+    show(authModal);
+});
+
+btnCloseAuth?.addEventListener("click", () => {
+    hide(authModal);
+});
+
+authModal?.addEventListener("click", e => {
+    if (e.target === authModal) hide(authModal);
+});
+
+tabLoginBtn?.addEventListener("click", () => {
+    tabLoginBtn.classList.add("active");
+    tabRegisterBtn.classList.remove("active");
+    show(loginForm);
+    hide(registerForm);
+});
+
+tabRegisterBtn?.addEventListener("click", () => {
+    tabRegisterBtn.classList.add("active");
+    tabLoginBtn.classList.remove("active");
+    show(registerForm);
+    hide(loginForm);
+});
+
+loginForm?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const username = document.getElementById("loginUsername").value;
+    const password = document.getElementById("loginPassword").value;
+
+    try {
+        const res = await fetch(BACKEND + "/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (data.error) {
+            showToast("❌ " + data.error, "error");
+            return;
+        }
+        setUserLoggedIn(data.user);
+        hide(authModal);
+        showToast("✅ Welcome back, " + data.user.username + "!", "success");
+        loadCloudHistory();
+    } catch {
+        showToast("Login request failed. Server offline?", "error");
+    }
+});
+
+registerForm?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const username = document.getElementById("regUsername").value;
+    const email    = document.getElementById("regEmail").value;
+    const password = document.getElementById("regPassword").value;
+
+    try {
+        const res = await fetch(BACKEND + "/api/auth/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ username, email, password })
+        });
+        const data = await res.json();
+        if (data.error) {
+            showToast("❌ " + data.error, "error");
+            return;
+        }
+        setUserLoggedIn(data.user);
+        hide(authModal);
+        showToast("🎉 Account created successfully!", "success");
+    } catch {
+        showToast("Registration failed. Server error?", "error");
+    }
+});
+
+btnLogout?.addEventListener("click", async () => {
+    try {
+        await fetch(BACKEND + "/api/auth/logout", { method: "POST", credentials: "include" });
+    } catch {}
+    setUserLoggedOut();
+    showToast("Signed out", "info");
+});
+
+async function loadCloudHistory() {
+    try {
+        const res = await fetch(BACKEND + "/api/auth/history", { credentials: "include" });
+        const data = await res.json();
+        if (data.history && data.history.length > 0) {
+            data.history.forEach(item => {
+                history.push({
+                    label: item.label,
+                    confidence: item.confidence,
+                    source: "cloud",
+                    time: new Date(item.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    dataset: item.dataset
+                });
+            });
+            renderHistory();
+        }
+    } catch {}
+}
