@@ -106,6 +106,9 @@ document.querySelectorAll(".tab").forEach(btn => {
         document.querySelectorAll(".tab-panel").forEach(p => p.classList.add("hidden"));
         btn.classList.add("active");
         document.getElementById("tab-" + btn.dataset.tab).classList.remove("hidden");
+        if (btn.dataset.tab === "map") {
+            setTimeout(initOrRefreshMap, 100);
+        }
     });
 });
 
@@ -677,6 +680,10 @@ async function postImage(url, fieldName, file, filename) {
     const form = new FormData();
     form.append(fieldName, file, filename || file.name || "image.png");
     form.append("dataset", currentDataset);    // always send current dataset
+    if (userLat && userLng) {
+        form.append("lat", userLat);
+        form.append("lng", userLng);
+    }
     try {
         const res = await fetch(url, { method: "POST", body: form });
         return await res.json();
@@ -725,3 +732,245 @@ function displayResult(top, top3, nameEl, badgeEl, descEl, confEl, barEl, top3El
         }, 100);
     }
 }
+
+
+/* ═══════════════════════════════════════════════
+   MAP & GPS GEOLOCATION ENGINE (LEAFLET)
+   ═══════════════════════════════════════════════ */
+let leafletMap     = null;
+let markersLayer   = null;
+let userMarker     = null;
+let userLat        = null;
+let userLng        = null;
+let mapLocations   = [];
+
+// Try to get user coordinates silently
+if ("geolocation" in navigator) {
+    navigator.geolocation.getCurrentPosition(
+        pos => {
+            userLat = pos.coords.latitude;
+            userLng = pos.coords.longitude;
+            const gpsEl = document.getElementById("mapGpsStatus");
+            if (gpsEl) gpsEl.textContent = `📍 GPS: Active (${userLat.toFixed(2)}, ${userLng.toFixed(2)})`;
+        },
+        err => {
+            const gpsEl = document.getElementById("mapGpsStatus");
+            if (gpsEl) gpsEl.textContent = "📍 GPS: Fallback Mode";
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+    );
+}
+
+function initOrRefreshMap() {
+    if (!window.L) {
+        showToast("Leaflet Map library still loading...", "warning");
+        return;
+    }
+
+    if (!leafletMap) {
+        // Default center: User location or New Delhi / Berlin default
+        const defaultLat = userLat || 28.6139;
+        const defaultLng = userLng || 77.2090;
+
+        leafletMap = L.map("mapView", {
+            center: [defaultLat, defaultLng],
+            zoom: 13,
+            zoomControl: true
+        });
+
+        // OpenStreetMap free tile layer
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(leafletMap);
+
+        markersLayer = L.layerGroup().addTo(leafletMap);
+    } else {
+        leafletMap.invalidateSize();
+    }
+
+    loadMapLocations();
+}
+
+async function loadMapLocations() {
+    try {
+        const res = await fetch(BACKEND + "/api/locations");
+        if (!res.ok) throw new Error("Locations API error");
+        mapLocations = await res.json();
+    } catch {
+        // Fallback default sample markers
+        mapLocations = [
+            { id: "1", label: "Stop", confidence: 98.4, dataset: "german", lat: 28.6139, lng: 77.2090, time: "10:15 AM", type: "danger" },
+            { id: "2", label: "Speed limit 50km/h", confidence: 96.1, dataset: "german", lat: 28.6180, lng: 77.2150, time: "10:18 AM", type: "standard" },
+            { id: "3", label: "Road hump", confidence: 93.8, dataset: "india", lat: 28.6220, lng: 77.2200, time: "10:22 AM", type: "warning" },
+            { id: "4", label: "No entry", confidence: 99.2, dataset: "india", lat: 28.6275, lng: 77.2240, time: "10:27 AM", type: "danger" }
+        ];
+    }
+    renderMapData();
+}
+
+function renderMapData() {
+    if (!leafletMap || !markersLayer) return;
+
+    markersLayer.clearLayers();
+
+    let dangerCount = 0;
+    const bounds = [];
+
+    mapLocations.forEach(loc => {
+        const isDanger = loc.type === "danger" || /stop|no|danger|warning|hazard/i.test(loc.label);
+        if (isDanger) dangerCount++;
+
+        const pinClass = isDanger ? "danger" : (loc.type === "warning" ? "warning" : "standard");
+        const iconSymbol = isDanger ? "🛑" : (loc.type === "warning" ? "⚠️" : "🔵");
+
+        const customIcon = L.divIcon({
+            className: "custom-div-icon",
+            html: `<div class="custom-pin ${pinClass}">${iconSymbol}</div>`,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+            popupAnchor: [0, -18]
+        });
+
+        const flag = loc.dataset === "india" ? "🇮🇳 India" : "🌍 German";
+        const popupContent = `
+            <div style="font-family: inherit; font-size: 0.88rem; line-height: 1.4;">
+                <b style="font-size: 1rem; color: #1a4a5e;">🚦 ${loc.label}</b><br/>
+                <span style="color: #5a8fa0;">Confidence: <b>${loc.confidence}%</b></span><br/>
+                <span style="font-size: 0.78rem; color: #888;">Dataset: ${flag} · Time: ${loc.time || "Recent"}</span><br/>
+                <span style="font-size: 0.72rem; color: #aaa;">GPS: ${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}</span>
+            </div>
+        `;
+
+        const marker = L.marker([loc.lat, loc.lng], { icon: customIcon })
+            .bindPopup(popupContent)
+            .addTo(markersLayer);
+
+        loc._marker = marker;
+        bounds.push([loc.lat, loc.lng]);
+    });
+
+    // Update stats bar
+    const totalEl = document.getElementById("mapTotalSigns");
+    const dangerEl = document.getElementById("mapDangerSigns");
+    if (totalEl) totalEl.textContent = `🚦 ${mapLocations.length} Signs Mapped`;
+    if (dangerEl) dangerEl.textContent = `⚠️ ${dangerCount} Hazard/Stop`;
+
+    // Fit bounds if we have points
+    if (bounds.length > 0) {
+        leafletMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+    }
+
+    renderMapFeed();
+}
+
+function renderMapFeed() {
+    const feed = document.getElementById("mapSignsFeed");
+    if (!feed) return;
+
+    if (!mapLocations.length) {
+        feed.innerHTML = '<p class="history-empty">No signs mapped yet. Detect signs with GPS enabled!</p>';
+        return;
+    }
+
+    feed.innerHTML = "";
+    mapLocations.slice(0, 15).forEach((loc, index) => {
+        const flag = loc.dataset === "india" ? "🇮🇳" : "🇩🇪";
+        const isDanger = loc.type === "danger" || /stop|no|danger|warning|hazard/i.test(loc.label);
+        const card = document.createElement("div");
+        card.className = "map-card-item";
+        card.innerHTML = `
+            <div class="map-card-left">
+                <span class="map-card-title">${isDanger ? "🛑" : "🚦"} ${loc.label}</span>
+                <span class="map-card-meta">${flag} ${loc.time || "Recent"} · [${loc.lat.toFixed(3)}, ${loc.lng.toFixed(3)}]</span>
+            </div>
+            <div class="map-card-right">
+                <span class="conf-badge" style="font-size:0.75rem;">${loc.confidence}%</span>
+            </div>
+        `;
+        card.addEventListener("click", () => {
+            if (leafletMap && loc._marker) {
+                leafletMap.setView([loc.lat, loc.lng], 16, { animate: true });
+                loc._marker.openPopup();
+            }
+        });
+        feed.appendChild(card);
+    });
+}
+
+// ── Toolbar Event Handlers ──
+document.getElementById("btnMapLocate")?.addEventListener("click", () => {
+    if (!navigator.geolocation) {
+        showToast("Geolocation not supported by your browser.", "error");
+        return;
+    }
+    showToast("Locating your position...", "info");
+    navigator.geolocation.getCurrentPosition(
+        pos => {
+            userLat = pos.coords.latitude;
+            userLng = pos.coords.longitude;
+
+            if (leafletMap) {
+                leafletMap.setView([userLat, userLng], 15);
+                if (userMarker) leafletMap.removeLayer(userMarker);
+
+                userMarker = L.circleMarker([userLat, userLng], {
+                    radius: 9,
+                    fillColor: "#0284c7",
+                    color: "#ffffff",
+                    weight: 3,
+                    opacity: 1,
+                    fillOpacity: 0.9
+                }).addTo(leafletMap).bindPopup("<b>📍 You are here</b>").openPopup();
+            }
+            showToast("Centered on your location!", "success");
+        },
+        err => showToast("Could not get location: " + err.message, "error"),
+        { enableHighAccuracy: true }
+    );
+});
+
+document.getElementById("btnMapReload")?.addEventListener("click", () => {
+    loadMapLocations();
+    showToast("Map markers reloaded!", "success");
+});
+
+document.getElementById("btnMapClear")?.addEventListener("click", async () => {
+    try {
+        await fetch(BACKEND + "/api/locations", { method: "DELETE" });
+        mapLocations = [];
+        renderMapData();
+        showToast("All map pins cleared!", "success");
+    } catch {
+        showToast("Failed to clear pins.", "error");
+    }
+});
+
+document.getElementById("btnMapExport")?.addEventListener("click", () => {
+    if (!mapLocations.length) {
+        showToast("No locations to export.", "warning");
+        return;
+    }
+    const geojson = {
+        type: "FeatureCollection",
+        features: mapLocations.map(loc => ({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [loc.lng, loc.lat] },
+            properties: {
+                label: loc.label,
+                confidence: loc.confidence,
+                dataset: loc.dataset,
+                time: loc.time,
+                type: loc.type
+            }
+        }))
+    };
+    const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: "application/geo+json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "roadguard_sign_map.geojson";
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("Downloaded GeoJSON file!", "success");
+});

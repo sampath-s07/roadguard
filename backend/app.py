@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-import os, sys
+import os, sys, json, time
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend.model_loader   import load_model, load_india_model, run_prediction, run_gradcam
@@ -10,11 +10,12 @@ from backend.video_processor import process_video
 app = Flask(__name__, static_folder="../frontend", static_url_path="")
 CORS(app)
 
-BASE         = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-GERMAN_MODEL = os.path.join(BASE, "saved_models", "custom_cnn.h5")
-INDIA_MODEL  = os.path.join(BASE, "saved_models", "india_cnn.h5")
-INDIA_NAMES  = os.path.join(BASE, "saved_models", "india_sign_names.json")
-YOLO_ONNX    = os.path.join(BASE, "saved_models", "yolov8n.onnx")
+BASE          = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+GERMAN_MODEL  = os.path.join(BASE, "saved_models", "custom_cnn.h5")
+INDIA_MODEL   = os.path.join(BASE, "saved_models", "india_cnn.h5")
+INDIA_NAMES   = os.path.join(BASE, "saved_models", "india_sign_names.json")
+YOLO_ONNX     = os.path.join(BASE, "saved_models", "yolov8n.onnx")
+LOCATION_FILE = os.path.join(BASE, "saved_models", "sign_locations.json")
 
 # Load all models at startup
 ok_de   = load_model(GERMAN_MODEL)
@@ -24,6 +25,25 @@ ok_yolo = load_yolo(YOLO_ONNX)
 if not ok_de:   print("WARNING: German model load failed.")
 if not ok_in:   print("WARNING: India model load failed.")
 if not ok_yolo: print("WARNING: YOLOv8 not available.")
+
+
+def get_locations():
+    if os.path.exists(LOCATION_FILE):
+        try:
+            with open(LOCATION_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def save_location_entry(entry):
+    locations = get_locations()
+    locations.insert(0, entry)
+    # keep last 100 markers
+    locations = locations[:100]
+    with open(LOCATION_FILE, "w") as f:
+        json.dump(locations, f, indent=2)
+    return locations
 
 
 # ── PAGES ──────────────────────────────────────────────────────────────────────
@@ -56,12 +76,33 @@ def predict():
         return jsonify({"error": "empty filename"}), 400
 
     dataset = request.form.get("dataset", "german")
+    lat_val = request.form.get("lat")
+    lng_val = request.form.get("lng")
+
     results = run_prediction(f.read(), dataset=dataset)
     if results is None:
         return jsonify({"error": "could not process image"}), 500
 
     top = results[0]
     print(f"[{dataset}] {top['label']} ({top['confidence']}%)")
+
+    # Geotag if location provided
+    if lat_val and lng_val:
+        try:
+            entry = {
+                "id":         f"loc_{int(time.time()*1000)}",
+                "label":      top["label"],
+                "confidence": top["confidence"],
+                "dataset":    dataset,
+                "lat":        float(lat_val),
+                "lng":        float(lng_val),
+                "time":       time.strftime("%I:%M %p"),
+                "type":       "danger" if any(w in top["label"].lower() for w in ["stop", "no", "danger", "warning", "curve"]) else "standard"
+            }
+            save_location_entry(entry)
+        except Exception as e:
+            print("Location save error:", e)
+
     return jsonify({"top": results, "dataset": dataset})
 
 
@@ -93,7 +134,6 @@ def process_video_route():
     f       = request.files["file"]
     dataset = request.form.get("dataset", "german")
 
-    # Size check: max 50 MB
     video_bytes = f.read()
     if len(video_bytes) > 50 * 1024 * 1024:
         return jsonify({"error": "Video too large (max 50 MB)"}), 413
@@ -143,6 +183,39 @@ def gradcam():
     if b64 is None:
         return jsonify({"error": "gradcam failed"}), 500
     return jsonify({"image": b64})
+
+
+# ── GPS & MAP API ──────────────────────────────────────────────────────────────
+@app.route("/api/locations", methods=["GET"])
+def get_all_locations():
+    return jsonify(get_locations())
+
+@app.route("/api/locations", methods=["POST"])
+def add_location():
+    data = request.get_json(silent=True) or request.form.to_dict()
+    if not data or "lat" not in data or "lng" not in data or "label" not in data:
+        return jsonify({"error": "Missing lat, lng, or label"}), 400
+    try:
+        entry = {
+            "id":         f"loc_{int(time.time()*1000)}",
+            "label":      data["label"],
+            "confidence": float(data.get("confidence", 95.0)),
+            "dataset":    data.get("dataset", "german"),
+            "lat":        float(data["lat"]),
+            "lng":        float(data["lng"]),
+            "time":       data.get("time", time.strftime("%I:%M %p")),
+            "type":       data.get("type", "standard")
+        }
+        updated = save_location_entry(entry)
+        return jsonify({"success": True, "location": entry, "count": len(updated)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/api/locations", methods=["DELETE"])
+def clear_locations():
+    with open(LOCATION_FILE, "w") as f:
+        json.dump([], f)
+    return jsonify({"success": True, "message": "Locations cleared"})
 
 
 if __name__ == "__main__":

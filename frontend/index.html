@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RoadGuard v2 — Traffic Sign Recognition</title>
     <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         /* ── Dataset Toggle ── */
         .dataset-toggle {
@@ -87,6 +89,7 @@
             <button class="tab" data-tab="webcam">🎥 Webcam</button>
             <button class="tab" data-tab="batch">📁 Batch</button>
             <button class="tab" data-tab="video">🎬 Video</button>
+            <button class="tab" data-tab="map">🗺️ Map</button>
         </div>
 
         <!-- ══ TAB: UPLOAD ══ -->
@@ -255,6 +258,34 @@
                 <div class="video-section-title">🕐 Timeline</div>
                 <div id="videoTimeline" class="video-timeline"></div>
                 <button class="btn-secondary" id="videoResetBtn">↩ Try Another Video</button>
+            </div>
+        </div>
+
+        <!-- ══ TAB: MAP & GPS ══ -->
+        <div class="tab-panel hidden" id="tab-map">
+            <div class="map-toolbar">
+                <div class="map-stats-bar">
+                    <span class="map-stat-badge" id="mapTotalSigns">🚦 0 Signs Mapped</span>
+                    <span class="map-stat-badge danger" id="mapDangerSigns">⚠️ 0 Hazard/Stop</span>
+                    <span class="map-stat-badge" id="mapGpsStatus">📍 GPS: Ready</span>
+                </div>
+                <div class="map-btn-group">
+                    <button class="map-btn" id="btnMapLocate">📍 My Location</button>
+                    <button class="map-btn" id="btnMapReload">🔄 Refresh</button>
+                    <button class="map-btn" id="btnMapExport">📥 Export GeoJSON</button>
+                    <button class="map-btn danger" id="btnMapClear">🗑️ Clear Pins</button>
+                </div>
+            </div>
+
+            <!-- Leaflet Container -->
+            <div id="mapView" class="map-view-box"></div>
+
+            <!-- Geotagged Signs Feed -->
+            <div class="map-feed-section">
+                <div class="video-section-title">📍 Mapped Road Signs Feed</div>
+                <div id="mapSignsFeed" class="map-signs-feed">
+                    <p class="history-empty">Loading mapped signs...</p>
+                </div>
             </div>
         </div>
 

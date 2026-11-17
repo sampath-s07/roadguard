@@ -1,0 +1,42 @@
+[
+  {
+    "id": "loc_1",
+    "label": "Stop",
+    "confidence": 98.4,
+    "dataset": "german",
+    "lat": 28.6139,
+    "lng": 77.2090,
+    "time": "10:15 AM",
+    "type": "danger"
+  },
+  {
+    "id": "loc_2",
+    "label": "Speed limit 50km/h",
+    "confidence": 96.1,
+    "dataset": "german",
+    "lat": 28.6180,
+    "lng": 77.2150,
+    "time": "10:18 AM",
+    "type": "speed"
+  },
+  {
+    "id": "loc_3",
+    "label": "Road hump",
+    "confidence": 93.8,
+    "dataset": "india",
+    "lat": 28.6220,
+    "lng": 77.2200,
+    "time": "10:22 AM",
+    "type": "warning"
+  },
+  {
+    "id": "loc_4",
+    "label": "No entry",
+    "confidence": 99.2,
+    "dataset": "india",
+    "lat": 28.6275,
+    "lng": 77.2240,
+    "time": "10:27 AM",
+    "type": "danger"
+  }
+]
