@@ -30,6 +30,8 @@ from backend.auth_db import (
     init_db, register_user, authenticate_user,
     log_user_detection, get_user_history
 )
+from backend.analytics import get_dashboard_data
+from backend.geocoder  import reverse_geocode
 
 # ── App setup ─────────────────────────────────────────────────────────────────
 app = Flask(__name__, static_folder="../frontend", static_url_path="")
@@ -367,6 +369,103 @@ def export_geojson():
         "properties": {k: v for k, v in loc.items() if k not in ("lat", "lng")}
     } for loc in locs if "lat" in loc and "lng" in loc]
     return jsonify({"type": "FeatureCollection", "features": features})
+
+
+# ── Analytics Dashboard ───────────────────────────────────────────────────────
+@app.route("/api/analytics")
+def api_analytics():
+    days    = int(request.args.get("days", 30))
+    user_id = session.get("user_id")   # None → global analytics
+    data    = get_dashboard_data(user_id=user_id, days=days)
+    return jsonify(data)
+
+
+# ── Model Comparison ──────────────────────────────────────────────────────────
+@app.route("/compare", methods=["POST"])
+def compare_models():
+    """Run same image through both German and Indian models, return side-by-side."""
+    data, err = _check_file("file", MAX_IMAGE_MB)
+    if err:
+        return err
+    german_res = run_prediction(data, dataset="german")
+    india_res  = run_prediction(data, dataset="india")
+    return jsonify({
+        "german": german_res or [],
+        "india":  india_res  or []
+    })
+
+
+# ── Reverse Geocoding ─────────────────────────────────────────────────────────
+@app.route("/api/geocode")
+def api_geocode():
+    try:
+        lat = float(request.args.get("lat", 0))
+        lng = float(request.args.get("lng", 0))
+    except (TypeError, ValueError):
+        return _err("Invalid lat/lng", 400, "INVALID_COORDS")
+    result = reverse_geocode(lat, lng)
+    return jsonify(result)
+
+
+# ── Speed Limit Check ─────────────────────────────────────────────────────────
+@app.route("/api/speedcheck", methods=["POST"])
+def speed_check():
+    """
+    Given a detected sign label and current GPS speed,
+    return whether the driver is over the limit.
+    """
+    data        = request.get_json(silent=True) or {}
+    label       = data.get("label", "").lower()
+    current_spd = float(data.get("speed_kmh", 0))
+
+    limit = None
+    for token in label.split():
+        token = token.replace("km/h","").replace("kmh","")
+        if token.isdigit():
+            limit = int(token)
+            break
+
+    if limit is None:
+        return jsonify({"has_limit": False})
+
+    over = current_spd > limit
+    return jsonify({
+        "has_limit":    True,
+        "limit_kmh":    limit,
+        "current_kmh":  current_spd,
+        "over_limit":   over,
+        "excess_kmh":   round(current_spd - limit, 1) if over else 0,
+        "alert":        f"⚠️ Speed limit {limit} km/h! You're doing {current_spd:.0f} km/h" if over else "✅ Within speed limit"
+    })
+
+
+# ── Live Webcam Frame Predict (high-speed endpoint) ───────────────────────────
+@app.route("/predict_live", methods=["POST"])
+def predict_live():
+    """
+    Lightweight endpoint for real-time webcam predictions.
+    Returns only top-1 result (fastest response).
+    """
+    global _total_detects
+    data, err = _check_file("file", 2)   # 2MB max per frame
+    if err:
+        return err
+
+    dataset = request.form.get("dataset", "german")
+    results = run_prediction(data, dataset=dataset)
+    if not results:
+        return jsonify({"label": "—", "confidence": 0, "description": ""})
+
+    top = results[0]
+    _total_detects += 1
+    return jsonify({
+        "label":       top["label"],
+        "confidence":  top["confidence"],
+        "description": top["description"],
+        "class_id":    top["class_id"],
+        "top3":        results,
+        "dataset":     dataset
+    })
 
 
 # ── Run ───────────────────────────────────────────────────────────────────────

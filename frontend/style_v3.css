@@ -1,0 +1,228 @@
+/* =====================================================
+   RoadGuard v3 — New CSS additions
+   Live webcam, analytics, compare tabs
+   ===================================================== */
+
+/* ── Live Detection Tab ──────────────────────────────── */
+.live-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: var(--card-bg);
+    border-radius: 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+}
+.live-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: #94a3b8;
+    transition: background 0.3s;
+}
+.live-dot.live-active {
+    background: #ef4444;
+    box-shadow: 0 0 8px #ef4444;
+    animation: pulse-live 1s infinite;
+}
+@keyframes pulse-live {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.6; transform: scale(1.3); }
+}
+
+.live-container {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 16px;
+}
+@media (max-width: 800px) {
+    .live-container { grid-template-columns: 1fr; }
+}
+
+.live-video-wrap {
+    position: relative;
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    min-height: 240px;
+}
+.live-video-wrap video {
+    width: 100%; display: block;
+}
+.live-overlay {
+    position: absolute;
+    bottom: 12px; left: 12px; right: 12px;
+    background: rgba(0,0,0,0.65);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    backdrop-filter: blur(4px);
+}
+#liveOverlayLabel { font-weight: 700; font-size: 0.95rem; }
+#liveOverlayConf  { font-size: 0.9rem; color: #10b981; font-weight: 700; }
+
+.live-result-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+}
+.live-sign-name {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 6px;
+}
+
+.live-sidebar { display: flex; flex-direction: column; gap: 12px; }
+
+.live-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+}
+.live-stat {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 6px;
+    text-align: center;
+}
+.live-stat span { font-size: 1.4rem; font-weight: 800; color: var(--primary); display: block; }
+.live-stat small { font-size: 0.7rem; opacity: 0.65; }
+
+.speed-alert {
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-weight: 700;
+    color: #fff;
+    font-size: 0.85rem;
+    margin: 8px 0;
+}
+
+.voice-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    margin: 8px 0;
+}
+
+.speed-input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.84rem;
+    margin: 6px 0;
+}
+.speed-input {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px 8px;
+    width: 70px;
+    background: var(--card-bg);
+    color: var(--text);
+    font-size: 0.85rem;
+}
+
+/* ── Analytics Tab ───────────────────────────────────── */
+.analytics-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.analytics-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+}
+@media (max-width: 700px) {
+    .analytics-summary { grid-template-columns: repeat(2,1fr); }
+}
+.a-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+}
+.a-num {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--primary);
+}
+.a-label { font-size: 0.75rem; opacity: 0.65; margin-top: 4px; }
+
+.charts-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+@media (max-width: 700px) {
+    .charts-row { grid-template-columns: 1fr; }
+}
+.chart-box {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+}
+.chart-title {
+    font-weight: 700;
+    font-size: 0.88rem;
+    margin-bottom: 10px;
+    opacity: 0.8;
+}
+
+/* ── Compare Tab ─────────────────────────────────────── */
+.compare-header { margin-bottom: 16px; }
+
+.compare-results {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 16px;
+}
+@media (max-width: 650px) {
+    .compare-results { grid-template-columns: 1fr; }
+}
+.compare-col {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+}
+.compare-col-title {
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+.compare-pred {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+}
+.compare-pred:last-child { border-bottom: none; }
+.compare-top { background: rgba(16,185,129,0.06); border-radius: 8px; padding: 8px; }
+.compare-rank {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: var(--accent);
+    min-width: 24px;
+    padding-top: 2px;
+}
+.compare-pred-info { flex: 1; }
+.compare-pred-info strong { font-size: 0.88rem; }
+.compare-pred-info small { opacity: 0.65; font-size: 0.78rem; }

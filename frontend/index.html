@@ -3,15 +3,17 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RoadGuard v2 — Traffic Sign Recognition</title>
+    <title>RoadGuard v3 — Traffic Sign Recognition</title>
     <link rel="manifest" href="manifest.json" />
     <meta name="theme-color" content="#0284c7" />
     <link rel="apple-touch-icon" href="icon-192.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style_v3.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
         /* ── Dataset Toggle ── */
         .dataset-toggle {
@@ -61,7 +63,7 @@
 <header class="topbar">
     <div class="brand">
         <span class="brand-icon">🚦</span>
-        <span class="brand-name">RoadGuard <sup>v2</sup></span>
+        <span class="brand-name">RoadGuard <sup>v3</sup></span>
     </div>
     <div class="topbar-right">
         <span class="accuracy-pill" id="accuracyPill">97.7% accuracy</span>
@@ -97,10 +99,13 @@
         <!-- TABS -->
         <div class="tabs">
             <button class="tab active" data-tab="upload">📷 Upload</button>
+            <button class="tab" data-tab="live">🔴 Live</button>
             <button class="tab" data-tab="webcam">🎥 Webcam</button>
             <button class="tab" data-tab="batch">📁 Batch</button>
             <button class="tab" data-tab="video">🎬 Video</button>
             <button class="tab" data-tab="map">🗺️ Map</button>
+            <button class="tab" data-tab="analytics">📊 Analytics</button>
+            <button class="tab" data-tab="compare">⚖️ Compare</button>
         </div>
 
         <!-- ══ TAB: UPLOAD ══ -->
@@ -188,6 +193,72 @@
                 <img id="detectImg" class="detect-img" src="" alt="detection" />
                 <div id="detectList" class="detect-list"></div>
                 <button class="btn-secondary" id="detectResetBtn">↩ Try Another</button>
+            </div>
+        </div>
+
+        <!-- ══ TAB: LIVE WEBCAM ══ -->
+        <div class="tab-panel hidden" id="tab-live">
+            <div class="live-header">
+                <span class="live-dot" id="liveDot"></span>
+                <strong id="liveStatusText">Camera off</strong>
+                <span id="liveFps" style="margin-left:auto;font-size:0.8rem;opacity:0.6;"></span>
+            </div>
+            <div class="live-container">
+                <div class="live-video-wrap">
+                    <video id="liveVideo" autoplay playsinline muted></video>
+                    <canvas id="liveCanvas"></canvas>
+                    <!-- Overlay result -->
+                    <div id="liveOverlay" class="live-overlay hidden">
+                        <div id="liveOverlayLabel">—</div>
+                        <div id="liveOverlayConf">0%</div>
+                    </div>
+                </div>
+                <div class="live-sidebar">
+                    <div class="live-result-card" id="liveResultCard">
+                        <div class="live-sign-name" id="liveName">—</div>
+                        <div class="bar-track" style="margin:8px 0"><div class="bar-fill" id="liveBar"></div></div>
+                        <div class="conf-label" id="liveConf">Confidence: 0%</div>
+                        <p class="result-desc" id="liveDesc" style="margin-top:8px;font-size:0.82rem;"></p>
+
+                        <!-- Speed Alert -->
+                        <div id="speedAlert" class="speed-alert hidden"></div>
+
+                        <!-- Voice toggle -->
+                        <label class="voice-toggle">
+                            <input type="checkbox" id="voiceEnabled" checked />
+                            🔊 Voice alerts
+                        </label>
+
+                        <!-- GPS Speed input -->
+                        <div class="speed-input-row">
+                            <span>🚗 My speed:</span>
+                            <input type="number" id="mySpeedInput" value="0" min="0" max="200" class="speed-input" />
+                            <span>km/h</span>
+                        </div>
+
+                        <!-- Top 3 live -->
+                        <div class="top3-section" style="margin-top:12px;">
+                            <div class="top3-title">Live Top 3</div>
+                            <div id="liveTop3"></div>
+                        </div>
+                    </div>
+
+                    <!-- Live stats -->
+                    <div class="live-stats">
+                        <div class="live-stat"><span id="liveDetCount">0</span><small>Detections</small></div>
+                        <div class="live-stat"><span id="liveAvgConf">0%</span><small>Avg Conf</small></div>
+                        <div class="live-stat"><span id="liveDangers">0</span><small>Hazards</small></div>
+                    </div>
+                </div>
+            </div>
+            <div class="webcam-controls">
+                <button class="btn-primary" id="startLiveBtn">🔴 Start Live Detection</button>
+                <button class="btn-secondary hidden" id="stopLiveBtn">⏹ Stop</button>
+                <select id="liveIntervalSel" class="speed-input" style="width:auto;padding:6px 10px;">
+                    <option value="500">Every 0.5s</option>
+                    <option value="1000" selected>Every 1s</option>
+                    <option value="2000">Every 2s</option>
+                </select>
             </div>
         </div>
 
@@ -302,6 +373,65 @@
 
     </main>
 
+        <!-- ══ TAB: ANALYTICS ══ -->
+        <div class="tab-panel hidden" id="tab-analytics">
+            <div class="analytics-header">
+                <h2 style="margin:0;font-size:1.2rem;">📊 Detection Analytics</h2>
+                <select id="analyticsDays" class="speed-input" style="width:auto;padding:6px 12px;">
+                    <option value="7">Last 7 days</option>
+                    <option value="30" selected>Last 30 days</option>
+                    <option value="90">Last 90 days</option>
+                </select>
+                <button class="btn-primary" id="refreshAnalytics" style="padding:6px 14px;">🔄 Refresh</button>
+            </div>
+            <div class="analytics-summary">
+                <div class="a-card"><div class="a-num" id="aTotalDet">—</div><div class="a-label">Total Detections</div></div>
+                <div class="a-card"><div class="a-num" id="aAvgConf">—</div><div class="a-label">Avg Confidence</div></div>
+                <div class="a-card"><div class="a-num" id="aUniqueSign">—</div><div class="a-label">Unique Signs</div></div>
+                <div class="a-card"><div class="a-num" id="aTopSign" style="font-size:0.85rem;">—</div><div class="a-label">Most Seen Sign</div></div>
+            </div>
+            <div class="charts-row">
+                <div class="chart-box"><div class="chart-title">📈 Detections Per Day</div><canvas id="chartTimeline" height="180"></canvas></div>
+                <div class="chart-box"><div class="chart-title">🏆 Top 10 Signs</div><canvas id="chartTopSigns" height="180"></canvas></div>
+            </div>
+            <div class="charts-row">
+                <div class="chart-box"><div class="chart-title">🌍 Dataset Split</div><canvas id="chartDataset" height="180"></canvas></div>
+                <div class="chart-box"><div class="chart-title">📉 Confidence Distribution</div><canvas id="chartConfidence" height="180"></canvas></div>
+            </div>
+        </div>
+
+        <!-- ══ TAB: COMPARE ══ -->
+        <div class="tab-panel hidden" id="tab-compare">
+            <div class="compare-header">
+                <h2 style="margin:0;font-size:1.2rem;">⚖️ A/B Model Comparison</h2>
+                <p style="margin:4px 0 0;opacity:0.7;font-size:0.85rem;">Same image → German &amp; Indian model side by side</p>
+            </div>
+            <div class="drop-zone" id="compareDropZone">
+                <div class="dz-icon">⚖️</div>
+                <p class="dz-title">Drop image to compare models</p>
+                <p class="dz-sub">or <span class="dz-browse">browse to upload</span></p>
+                <input type="file" id="compareInput" accept="image/*" hidden />
+            </div>
+            <div id="comparePreviewWrap" class="preview-wrap hidden">
+                <div class="preview-inner">
+                    <img id="comparePreview" src="" alt="compare preview" />
+                    <button class="btn-clear" id="compareClearBtn">✕</button>
+                </div>
+            </div>
+            <button class="btn-primary hidden" id="compareBtn" style="margin:12px auto;display:block;">⚖️ Compare Both Models</button>
+            <div class="loading hidden" id="compareLoading"><div class="spinner"></div><p>Running both models…</p></div>
+            <div class="compare-results hidden" id="compareResults">
+                <div class="compare-col">
+                    <div class="compare-col-title">🇩🇪 German Model (GTSRB · 43 classes)</div>
+                    <div id="compareGermanResult"></div>
+                </div>
+                <div class="compare-col">
+                    <div class="compare-col-title">🇮🇳 Indian Model (58 classes)</div>
+                    <div id="compareIndiaResult"></div>
+                </div>
+            </div>
+        </div>
+
     <!-- ── HISTORY SIDEBAR ── -->
     <aside class="history-sidebar">
         <div class="history-header">
@@ -317,7 +447,7 @@
 
 <!-- ══════════════════ FOOTER ══════════════════ -->
 <footer class="footer">
-    <p>RoadGuard v2 · Custom CNN · German (43 classes, 97.7%) &amp; Indian (58 classes, 90.7%) · GTSRB + Indian Dataset</p>
+    <p>RoadGuard v3 · CNN + YOLOv8 · German (43 classes, 97.7%) &amp; Indian (58 classes, 90.7%) · Live Detection · Analytics · A/B Compare</p>
 </footer>
 
 <!-- ══════════════════ AUTH MODAL ══════════════════ -->
@@ -351,5 +481,6 @@
 </div>
 
 <script src="script.js"></script>
+<script src="features_v3.js"></script>
 </body>
 </html>
