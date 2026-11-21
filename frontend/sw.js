@@ -1,9 +1,11 @@
 /* RoadGuard Service Worker (sw.js) */
-const CACHE_NAME = "roadguard-cache-v2";
+const CACHE_NAME = "roadguard-cache-v5";
 const ASSETS_TO_CACHE = [
   "/",
   "/style.css",
+  "/style_v3.css",
   "/script.js",
+  "/features_v3.js",
   "/gallery.html",
   "/manifest.json",
   "/icon-192.png",
@@ -35,18 +37,20 @@ self.addEventListener("activate", event => {
 });
 
 self.addEventListener("fetch", event => {
-  // Only cache GET requests (don't intercept POST requests to /predict or APIs)
   if (event.request.method !== "GET") return;
 
+  // Network-first strategy so fresh code is always loaded when online
   event.respondWith(
-    caches.match(event.request).then(cachedResponse => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).catch(() => {
-        // Fallback if offline
-        return caches.match("/");
-      });
-    })
+    fetch(event.request)
+      .then(response => {
+        if (response && response.status === 200) {
+          const respClone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, respClone));
+        }
+        return response;
+      })
+      .catch(() => {
+        return caches.match(event.request).then(cached => cached || caches.match("/"));
+      })
   );
 });

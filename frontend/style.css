@@ -143,7 +143,9 @@ body {
 }
 
 .tab-panel { display: none; }
-.tab-panel.active { display: block; }
+.tab-panel.active { display: block !important; }
+.tab-panel:not(.hidden) { display: block; }
+.tab-panel.hidden { display: none !important; }
 
 /* ══════════════════ DROP ZONE ══════════════════ */
 .drop-zone {
