@@ -366,14 +366,5 @@ function renderCompareResult(elId, predictions) {
     ).join("");
 }
 
-// ── Tab switch hook: load analytics when analytics tab opens ──────────────────
-document.querySelectorAll(".tab").forEach(btn => {
-    btn.addEventListener("click", () => {
-        if (btn.dataset.tab === "analytics") {
-            setTimeout(loadAnalytics, 100);
-        }
-    });
-});
-
 // ── Add refresh analytics button listener ─────────────────────────────────────
 document.getElementById("refreshAnalytics")?.addEventListener("click", loadAnalytics);

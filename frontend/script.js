@@ -103,12 +103,18 @@ window.setDataset = function(ds) {
 document.querySelectorAll(".tab").forEach(btn => {
     btn.addEventListener("click", () => {
         document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-        document.querySelectorAll(".tab-panel").forEach(p => p.classList.add("hidden"));
+        document.querySelectorAll(".tab-panel").forEach(p => {
+            p.classList.remove("active");
+            p.classList.add("hidden");
+        });
         btn.classList.add("active");
-        document.getElementById("tab-" + btn.dataset.tab).classList.remove("hidden");
-        if (btn.dataset.tab === "map") {
-            setTimeout(initOrRefreshMap, 100);
+        const panel = document.getElementById("tab-" + btn.dataset.tab);
+        if (panel) {
+            panel.classList.remove("hidden");
+            panel.classList.add("active");
         }
+        if (btn.dataset.tab === "map") setTimeout(initOrRefreshMap, 100);
+        if (btn.dataset.tab === "analytics") setTimeout(loadAnalytics, 100);
     });
 });
 
