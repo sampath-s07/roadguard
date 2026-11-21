@@ -28,24 +28,22 @@ try:
     import onnxruntime as ort
     _HAS_ORT = True
     log.info(f"onnxruntime {ort.__version__} available")
-except ImportError:
+except Exception as e:
+    log.info(f"onnxruntime not available: {e}")
+
+try:
+    import tensorflow as tf
+    _HAS_TF = True
+    log.info(f"TensorFlow {tf.__version__} available")
+except Exception as e:
+    log.warning(f"TensorFlow not available: {e}")
+
+try:
+    import tflite_runtime.interpreter as tflite
+    _HAS_TFL = True
+    log.info("tflite_runtime available")
+except Exception:
     pass
-
-if not _HAS_ORT:
-    try:
-        import tensorflow as tf
-        _HAS_TF = True
-        log.info(f"TensorFlow {tf.__version__} available")
-    except Exception as e:
-        log.warning(f"TensorFlow not available: {e}")
-
-if not _HAS_ORT and not _HAS_TF:
-    try:
-        import tflite_runtime.interpreter as tflite
-        _HAS_TFL = True
-        log.info("tflite_runtime available")
-    except ImportError:
-        pass
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 IMG_SIZE          = 32
@@ -272,16 +270,16 @@ def run_prediction(img_bytes, dataset="german"):
         return None
 
     if dataset == "india":
-        if   _in_ort: preds = _infer_ort(_in_ort, inp)
-        elif _in_tf:  preds = _infer_tf(_in_tf, inp)
-        elif _in_tfl: preds = _infer_tfl(_in_tfl, inp)
+        if   _in_ort is not None: preds = _infer_ort(_in_ort, inp)
+        elif _in_tf  is not None: preds = _infer_tf(_in_tf, inp)
+        elif _in_tfl is not None: preds = _infer_tfl(_in_tfl, inp)
         else: return None
         names = india_sign_names
         descs = None
     else:
-        if   _de_ort: preds = _infer_ort(_de_ort, inp)
-        elif _de_tf:  preds = _infer_tf(_de_tf, inp)
-        elif _de_tfl: preds = _infer_tfl(_de_tfl, inp)
+        if   _de_ort is not None: preds = _infer_ort(_de_ort, inp)
+        elif _de_tf  is not None: preds = _infer_tf(_de_tf, inp)
+        elif _de_tfl is not None: preds = _infer_tfl(_de_tfl, inp)
         else: return None
         names = german_sign_names
         descs = german_sign_descriptions
